@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+.venv/
+ENV/
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+
+
+# Project specific
+maxo/maxo.lock
+maxo/memory.json
+maxo/temp/
+maxo/models/
+maxo/*.mp3
+maxo/*.vbs
+maxo/*.png
+maxo/*.jpg
+maxo/photo.jpg
+maxo/screen_capture.png
+maxo/screenshot.png
+maxo/error_check.png
+
+# Keep icons but ignore other assets
+!maxo/maxo_icon.png
+!maxo/maxo_icon.ico

@@ -1,0 +1,12 @@
+{
+    "assistant_name": "Ank",
+    "voice": "Charon",
+    "mcp_servers": [
+        {
+            "name": "N8N Ank Server",
+            "url": "https://n8n.abhiyank.in/mcp/mcp",
+            "type": "streamable_http"
+        }
+    ],
+    "owner": "Abhiyank"
+}

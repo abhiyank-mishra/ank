@@ -1,0 +1,12 @@
+# === Ank Voice Assistant — Dependencies ===
+python-dotenv
+livekit-agents[silero,google,mcp]~=1.4
+aiohttp
+pyautogui
+psutil
+Pillow
+google-generativeai
+pywhatkit
+wikipedia
+requests
+duckduckgo-search
