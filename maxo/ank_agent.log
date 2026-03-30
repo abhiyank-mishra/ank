@@ -52,3 +52,8 @@
 "{\"times\": 10}", "speech_id": "speech_fd7416f8d2d3"}
     00:08:37.719 DEBUG… livekit.agents     tools execution completed  
                                          {"speech_id": "speech_fd7416f8d2d3"}
+    00:09:44.885 DEBUG… livekit.agents     executing tool  
+                                         {"function": "volume_up", "arguments":
+"{\"times\": 10}", "speech_id": "speech_5d9154cc7a4f"}
+    00:09:45.900 DEBUG… livekit.agents     tools execution completed  
+                                         {"speech_id": "speech_5d9154cc7a4f"}
