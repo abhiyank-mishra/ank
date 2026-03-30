@@ -4,6 +4,7 @@ import asyncio
 import logging
 import json
 from pathlib import Path
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Ensure the project root is on the path
@@ -22,6 +23,9 @@ from livekit_tools import ALL_TOOLS
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "system.md"
+PERSONALITIES_PATH = Path(__file__).parent / "personalities.json"
+MEMORY_PATH = Path(__file__).parent / "memory.json"
+CONVERSATION_LOG_PATH = Path(__file__).parent / "conversation_history.json"
 
 
 def load_config():
@@ -33,13 +37,153 @@ def load_config():
         return {"voice": "Charon", "assistant_name": "Ank", "owner": "Abhiyank", "mcp_servers": []}
 
 
+def load_personalities():
+    """Load personality profiles."""
+    try:
+        with open(PERSONALITIES_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"active": "ank", "profiles": {}}
+
+
+def get_active_personality():
+    """Get the currently active personality profile."""
+    data = load_personalities()
+    active_id = data.get("active", "ank")
+    profiles = data.get("profiles", {})
+    return active_id, profiles.get(active_id, {})
+
+
 def load_system_prompt():
-    """Load system prompt from system.md file."""
+    """Load base system prompt from system.md file."""
     try:
         with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
             return f.read()
     except Exception:
         return "You are Ank, an AI voice assistant created by Abhiyank. Address the user as Sir."
+
+
+def load_memory():
+    """Load persistent memory."""
+    try:
+        with open(MEMORY_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def load_conversation_history():
+    """Load recent conversation history for context."""
+    try:
+        with open(CONVERSATION_LOG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Return last 20 messages for context
+            return data.get("messages", [])[-20:]
+    except Exception:
+        return []
+
+
+def save_conversation_message(role, text):
+    """Save a message to conversation history."""
+    try:
+        try:
+            with open(CONVERSATION_LOG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {"messages": []}
+
+        data["messages"].append({
+            "role": role,
+            "text": text,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Keep only last 100 messages
+        data["messages"] = data["messages"][-100:]
+
+        with open(CONVERSATION_LOG_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def build_full_prompt():
+    """Build the complete system prompt with personality + memory + conversation history."""
+    _, personality = get_active_personality()
+    base_prompt = load_system_prompt()
+    memory = load_memory()
+    history = load_conversation_history()
+
+    # Start with personality prompt (overrides base identity)
+    if personality.get("prompt"):
+        prompt = personality["prompt"]
+    else:
+        prompt = base_prompt
+
+    # Add base capabilities from system.md (tools, web search, MCP section)
+    # Extract everything after the identity section
+    sections_to_keep = []
+    in_section = False
+    current_section = []
+    for line in base_prompt.split("\n"):
+        if line.strip().startswith("---") and in_section:
+            sections_to_keep.append("\n".join(current_section))
+            current_section = [line]
+        elif line.strip().startswith("---"):
+            in_section = True
+            current_section = [line]
+        elif in_section:
+            current_section.append(line)
+    if current_section:
+        sections_to_keep.append("\n".join(current_section))
+
+    if sections_to_keep:
+        prompt += "\n\n" + "\n\n".join(sections_to_keep)
+
+    # Add memory section
+    if memory:
+        prompt += "\n\n----------------------------------"
+        prompt += "\nMEMORY - Things you remember"
+        prompt += "\n----------------------------------\n"
+
+        facts = memory.get("facts", {})
+        if facts:
+            prompt += "\nKnown Facts:\n"
+            for key, value in facts.items():
+                prompt += f"- {key}: {value}\n"
+
+        notes = memory.get("notes", [])
+        if notes:
+            prompt += "\nNotes:\n"
+            for note in notes[-10:]:
+                prompt += f"- {note}\n"
+
+        reminders = memory.get("reminders", [])
+        if reminders:
+            prompt += "\nActive Reminders:\n"
+            for r in reminders:
+                prompt += f"- {r}\n"
+
+        important = memory.get("important", [])
+        if important:
+            prompt += "\nImportant:\n"
+            for item in important:
+                prompt += f"- {item}\n"
+
+    # Add recent conversation history
+    if history:
+        prompt += "\n\n----------------------------------"
+        prompt += "\nRECENT CONVERSATION HISTORY"
+        prompt += "\n----------------------------------\n"
+        prompt += "Here is what was discussed recently. Use this to maintain context:\n\n"
+        for msg in history:
+            role = msg.get("role", "unknown")
+            text = msg.get("text", "")
+            prompt += f"[{role}]: {text}\n"
+
+        prompt += "\nIf there were any incomplete tasks mentioned above, proactively follow up on them."
+
+    return prompt
 
 
 def build_mcp_servers(config):
@@ -55,33 +199,51 @@ def build_mcp_servers(config):
 
         try:
             if srv_type == "stdio":
-                # For stdio servers, url is the command, args can be in config
                 servers.append(mcp.MCPServerStdio(
                     command=url,
                     args=srv.get("args", []),
                 ))
             else:
-                # HTTP/SSE server
                 headers = {}
                 if srv.get("api_key"):
                     headers["Authorization"] = f"Bearer {srv['api_key']}"
-                servers.append(mcp.MCPServerHTTP(url, headers=headers if headers else None))
+                servers.append(mcp.MCPServerHTTP(
+                    url,
+                    headers=headers if headers else None,
+                    timeout=30,
+                    client_session_timeout_seconds=30,
+                ))
 
-            logging.info(f"🔌 MCP Server configured: {name} ({url})")
-        except Exception as e:
-            logging.warning(f"⚠️ Failed to configure MCP server '{name}': {e}")
+            logging.info(f"MCP Server configured: {name} ({url})")
+        except Exception:
+            logging.warning(f"MCP server '{name}' is not available, skipping.")
 
     return servers
+
+
+def safe_build_agent(system_prompt, config):
+    """Build agent with MCP servers, gracefully falling back if MCP fails."""
+    try:
+        mcp_servers = build_mcp_servers(config)
+        if mcp_servers:
+            return Agent(instructions=system_prompt, mcp_servers=mcp_servers)
+    except Exception:
+        logging.warning("MCP not available - running without MCP tools.")
+
+    return Agent(instructions=system_prompt)
 
 
 load_dotenv()
 
 async def entrypoint(ctx: JobContext):
     config = load_config()
-    voice = config.get("voice", "Charon")
-    system_prompt = load_system_prompt()
+    _, personality = get_active_personality()
+    voice = personality.get("voice", config.get("voice", "Charon"))
+    system_prompt = build_full_prompt()
+    greeting = personality.get("greeting", "Systems online, Sir.")
+    name = personality.get("name", "Ank")
 
-    logging.info(f"🚀 Ank Agent connecting to room: {ctx.job.room.name} (voice: {voice})")
+    logging.info(f"Agent [{name}] connecting to room: {ctx.job.room.name} (voice: {voice})")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
     model = google.realtime.RealtimeModel(
@@ -89,13 +251,7 @@ async def entrypoint(ctx: JobContext):
         voice=voice,
     )
 
-    # Build MCP servers from config
-    mcp_servers = build_mcp_servers(config)
-
-    ank_agent = Agent(
-        instructions=system_prompt,
-        mcp_servers=mcp_servers if mcp_servers else None,
-    )
+    ank_agent = safe_build_agent(system_prompt, config)
 
     session = AgentSession(
         llm=model,
@@ -111,23 +267,27 @@ async def entrypoint(ctx: JobContext):
     @session.on("transcription")
     def on_transcription(transcription):
         if transcription.is_final:
+            save_conversation_message(name, transcription.text)
             msg_data = json.dumps({
                 "type": "transcription",
                 "text": transcription.text,
-                "participant": "Ank"
+                "participant": name
             })
             asyncio.create_task(ctx.room.local_participant.publish_data(msg_data))
 
     await session.start(agent=ank_agent, room=ctx.room)
 
-    logging.info("🎤 Ank is LIVE.")
-    await session.generate_reply(instructions="Say: 'Ank Initialized. Systems are online, Sir.'")
+    logging.info(f"{name} is LIVE.")
+    await session.generate_reply(instructions=f"Say: '{greeting}'")
 
 async def gui_connect(room_name):
     from livekit import api, rtc
     config = load_config()
-    voice = config.get("voice", "Charon")
-    system_prompt = load_system_prompt()
+    _, personality = get_active_personality()
+    voice = personality.get("voice", config.get("voice", "Charon"))
+    system_prompt = build_full_prompt()
+    greeting = personality.get("greeting", "Systems online, Sir.")
+    name = personality.get("name", "Ank")
 
     url = os.getenv("LIVEKIT_URL")
     api_key = os.getenv("LIVEKIT_API_KEY")
@@ -135,11 +295,11 @@ async def gui_connect(room_name):
 
     room = rtc.Room()
     token = api.AccessToken(api_key, api_secret) \
-        .with_identity("Ank_Agent") \
+        .with_identity(f"{name}_Agent") \
         .with_grants(api.VideoGrants(room_join=True, room=room_name)) \
         .to_jwt()
 
-    logging.info(f"🚀 Ank Agent connecting directly to GUI room: {room_name} (voice: {voice})")
+    logging.info(f"Agent [{name}] connecting to GUI room: {room_name} (voice: {voice})")
     await room.connect(url, token)
 
     model = google.realtime.RealtimeModel(
@@ -147,13 +307,7 @@ async def gui_connect(room_name):
         voice=voice,
     )
 
-    # Build MCP servers from config
-    mcp_servers = build_mcp_servers(config)
-
-    ank_agent = Agent(
-        instructions=system_prompt,
-        mcp_servers=mcp_servers if mcp_servers else None,
-    )
+    ank_agent = safe_build_agent(system_prompt, config)
 
     session = AgentSession(
         llm=model,
@@ -169,12 +323,13 @@ async def gui_connect(room_name):
     @session.on("transcription")
     def on_transcription(transcription):
         if transcription.is_final:
-            msg = json.dumps({"type": "transcription", "text": transcription.text, "participant": "Ank"})
+            save_conversation_message(name, transcription.text)
+            msg = json.dumps({"type": "transcription", "text": transcription.text, "participant": name})
             asyncio.create_task(room.local_participant.publish_data(msg))
 
     await session.start(agent=ank_agent, room=room)
-    logging.info("🎤 Ank is LIVE.")
-    await session.generate_reply(instructions="Say: 'Ank Initialized. Systems are online, Sir.'")
+    logging.info(f"{name} is LIVE.")
+    await session.generate_reply(instructions=f"Say: '{greeting}'")
 
     while True:
         await asyncio.sleep(1)

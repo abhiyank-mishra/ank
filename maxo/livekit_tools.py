@@ -59,40 +59,31 @@ FILE_CATEGORIES = {
 # 🟢 SYSTEM CONTROL
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Shutdown the computer immediately. You MUST explicitly ask the user for the 4-digit password before calling this tool. DO NOT guess the password yourself.")
-async def shutdown(password: str) -> str:
-    """Shutdown the computer. Requires password.
+@llm.function_tool(description="Shutdown the computer immediately. You MUST explicitly ask the user the security question 'What is your best AI agent's name?' before calling this tool. DO NOT guess the answer yourself.")
+async def shutdown(answer: str) -> str:
+    """Shutdown the computer. Requires security answer.
     
     Args:
-        password: The 4-digit password (current time in HHMM format) provided by the user.
+        answer: The answer to the security question provided by the user.
     """
-    import datetime
-    current_time_pass = datetime.datetime.now().strftime("%H%M")
-    
-    # Check if the generated or stripped password matches the HHMM format
-    clean_pass = ''.join(filter(str.isdigit, password))
-    if clean_pass != current_time_pass:
-        return "Incorrect password. Tell the user the password was wrong and do not shutdown."
+    if "jessica" not in answer.lower():
+        return "Incorrect answer. Tell the user the answer was wrong and do not shutdown."
         
     os.system("shutdown /s /t 1")
-    return "Password correct. Shutting down, Sir."
+    return "Answer correct. Shutting down, Sir."
 
-@llm.function_tool(description="Restart the computer immediately. You MUST explicitly ask the user for the 4-digit password before calling this tool. DO NOT guess the password yourself.")
-async def restart(password: str) -> str:
-    """Restart the computer. Requires password.
+@llm.function_tool(description="Restart the computer immediately. You MUST explicitly ask the user the security question 'What is your best AI agent's name?' before calling this tool. DO NOT guess the answer yourself.")
+async def restart(answer: str) -> str:
+    """Restart the computer. Requires security answer.
     
     Args:
-        password: The 4-digit password (current time in HHMM format) provided by the user.
+        answer: The answer to the security question provided by the user.
     """
-    import datetime
-    current_time_pass = datetime.datetime.now().strftime("%H%M")
-    
-    clean_pass = ''.join(filter(str.isdigit, password))
-    if clean_pass != current_time_pass:
-        return "Incorrect password. Tell the user the password was wrong and do not restart."
+    if "jessica" not in answer.lower():
+        return "Incorrect answer. Tell the user the answer was wrong and do not restart."
         
     os.system("shutdown /r /t 1")
-    return "Password correct. Restarting, Sir."
+    return "Answer correct. Restarting, Sir."
 
 @llm.function_tool(description="Lock the screen")
 async def lock_screen() -> str:
@@ -255,7 +246,7 @@ async def running_processes() -> str:
 # 🔊 VOLUME & DISPLAY
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Increase system volume by N steps (default 5)")
+@llm.function_tool(description="Increase system volume by N steps. 1 step = 2% (default 5 steps = 10%)")
 async def volume_up(times: int = 5) -> str:
     """Increase volume.
 
@@ -265,7 +256,7 @@ async def volume_up(times: int = 5) -> str:
     for _ in range(times): pyautogui.press('volumeup')
     return f"Volume up {times} steps."
 
-@llm.function_tool(description="Decrease system volume by N steps (default 5)")
+@llm.function_tool(description="Decrease system volume by N steps. 1 step = 2% (default 5 steps = 10%)")
 async def volume_down(times: int = 5) -> str:
     """Decrease volume.
 
@@ -274,6 +265,21 @@ async def volume_down(times: int = 5) -> str:
     """
     for _ in range(times): pyautogui.press('volumedown')
     return f"Volume down {times} steps."
+
+@llm.function_tool(description="Set system volume to a specific percentage (0 to 100). Use for 'full volume' (100) or specific levels.")
+async def set_volume(level: int) -> str:
+    """Set system volume level to a specific percentage.
+
+    Args:
+        level: Percentage to set the volume to, from 0 to 100
+    """
+    level = max(0, min(100, level))
+    # Reset volume to 0 first (50 steps handles any volume since 50*2=100)
+    for _ in range(50): pyautogui.press('volumedown')
+    # Set to target level
+    steps = level // 2
+    for _ in range(steps): pyautogui.press('volumeup')
+    return f"Volume set to {level}%."
 
 @llm.function_tool(description="Toggle mute/unmute system volume")
 async def volume_mute() -> str:
@@ -323,17 +329,31 @@ async def google_search(query: str) -> str:
     webbrowser.open(f"https://www.google.com/search?q={query}")
     return f"Searching: {query}"
 
-@llm.function_tool(description="Search and play something on YouTube")
+@llm.function_tool(description="Search and play something on YouTube. It will find the top result and auto-play it.")
 async def youtube_search(query: str) -> str:
-    """Search YouTube.
+    """Search and play on YouTube.
 
     Args:
-        query: Video or topic to search
+        query: Song, video, or topic to play
     """
     try:
-        import pywhatkit; pywhatkit.playonyt(query)
-    except: webbrowser.open(f"https://www.youtube.com/results?search_query={query}")
-    return f"Playing {query} on YouTube."
+        import urllib.request
+        import urllib.parse
+        import re
+        # Search YouTube and find the first video ID
+        search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}"
+        html = urllib.request.urlopen(search_url).read().decode('utf-8')
+        # Find the first video ID in the search results
+        video_ids = re.findall(r'watch\?v=([a-zA-Z0-9_-]{11})', html)
+        if video_ids:
+            webbrowser.open(f"https://www.youtube.com/watch?v={video_ids[0]}")
+            return f"Playing '{query}' on YouTube."
+        else:
+            webbrowser.open(search_url)
+            return f"Showing search results for '{query}' on YouTube."
+    except Exception:
+        webbrowser.open(f"https://www.youtube.com/results?search_query={query}")
+        return f"Showing search results for '{query}' on YouTube."
 
 @llm.function_tool(description="Open multiple websites at once, comma separated")
 async def open_multiple_tabs(sites: str) -> str:
@@ -1175,7 +1195,7 @@ ALL_TOOLS = [
     minimize_all, maximize_window, minimize_window,
     empty_recycle_bin, disk_space, battery_status, uptime, running_processes,
     # Volume & Display
-    volume_up, volume_down, volume_mute, brightness,
+    volume_up, volume_down, set_volume, volume_mute, brightness,
     # Web & Browser
     open_website, google_search, youtube_search, open_multiple_tabs,
     switch_tab, close_tab, new_tab, incognito, refresh_page,
