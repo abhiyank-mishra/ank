@@ -3,6 +3,7 @@ import sys
 import asyncio
 import logging
 import json
+import time
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -264,9 +265,33 @@ async def entrypoint(ctx: JobContext):
         tools=ALL_TOOLS
     )
 
+    last_user_speech_time = time.time()
+
+    async def idle_checker():
+        while True:
+            await asyncio.sleep(5)
+            state_file = Path(__file__).parent / "state.json"
+            is_sleeping = False
+            if state_file.exists():
+                try:
+                    with open(state_file, "r", encoding="utf-8") as f:
+                        is_sleeping = json.load(f).get("is_sleeping", False)
+                except Exception: pass
+            
+            if not is_sleeping and (time.time() - last_user_speech_time > 180):
+                try:
+                    with open(state_file, "w", encoding="utf-8") as f:
+                        json.dump({"is_sleeping": True}, f)
+                    await session.generate_reply(instructions="The user has been idle for over 3 minutes. BRIEFLY tell them you are entering sleep mode to save energy, and do it.")
+                except Exception: pass
+
+    asyncio.create_task(idle_checker())
+
     @session.on("transcription")
     def on_transcription(transcription):
+        nonlocal last_user_speech_time
         if transcription.is_final:
+            last_user_speech_time = time.time()
             save_conversation_message(name, transcription.text)
             msg_data = json.dumps({
                 "type": "transcription",
@@ -320,9 +345,33 @@ async def gui_connect(room_name):
         tools=ALL_TOOLS
     )
 
+    last_user_speech_time = time.time()
+
+    async def idle_checker_gui():
+        while True:
+            await asyncio.sleep(5)
+            state_file = Path(__file__).parent / "state.json"
+            is_sleeping = False
+            if state_file.exists():
+                try:
+                    with open(state_file, "r", encoding="utf-8") as f:
+                        is_sleeping = json.load(f).get("is_sleeping", False)
+                except Exception: pass
+            
+            if not is_sleeping and (time.time() - last_user_speech_time > 180):
+                try:
+                    with open(state_file, "w", encoding="utf-8") as f:
+                        json.dump({"is_sleeping": True}, f)
+                    await session.generate_reply(instructions="The user has been idle for over 3 minutes. BRIEFLY tell them you are entering sleep mode to save energy, and do it.")
+                except Exception: pass
+
+    asyncio.create_task(idle_checker_gui())
+
     @session.on("transcription")
     def on_transcription(transcription):
+        nonlocal last_user_speech_time
         if transcription.is_final:
+            last_user_speech_time = time.time()
             save_conversation_message(name, transcription.text)
             msg = json.dumps({"type": "transcription", "text": transcription.text, "participant": name})
             asyncio.create_task(room.local_participant.publish_data(msg))

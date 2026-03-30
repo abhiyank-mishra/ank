@@ -25,6 +25,7 @@ LOG_FILE = SCRIPT_DIR / "ank_agent.log"
 LOCK_FILE = SCRIPT_DIR / "ank.lock"
 PERSONALITIES_PATH = SCRIPT_DIR / "personalities.json"
 CONFIG_PATH = SCRIPT_DIR / "config.json"
+STATE_PATH = SCRIPT_DIR / "state.json"
 
 # Widget config
 WIDGET_SIZE = 70
@@ -131,6 +132,14 @@ class FloatingAnk:
         # Load icon
         self._load_icon()
         self._draw_widget()
+
+        # Sleep toggle button
+        self.sleep_btn = tk.Button(
+            self.root, text="💤", font=("Segoe UI", 8),
+            bg="#1a1a2e", fg="#ffffff", bd=0, activebackground="#ffab40",
+            command=self._toggle_sleep
+        )
+        self.sleep_btn.place(x=GLOW_SIZE - 22, y=0, width=22, height=22)
 
         # Drag
         self._drag_data = {"x": 0, "y": 0}
@@ -290,6 +299,22 @@ class FloatingAnk:
         x = self.root.winfo_x() + dx
         y = self.root.winfo_y() + dy
         self.root.geometry(f"+{x}+{y}")
+
+    def _toggle_sleep(self):
+        """Toggle sleep/mute state for the agent."""
+        current = False
+        if STATE_PATH.exists():
+            try:
+                with open(STATE_PATH, "r", encoding="utf-8") as f:
+                    current = json.load(f).get("is_sleeping", False)
+            except Exception: pass
+        
+        new_state = not current
+        with open(STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"is_sleeping": new_state}, f)
+        
+        self.sleep_btn.config(fg="#ff5252" if new_state else "#ffffff")
+        self._show_tooltip("Entering Sleep (Zzz)" if new_state else "Waking Up", "#ff5252" if new_state else "#00e676")
 
     # --- Menu ---
     def _show_menu(self, event):

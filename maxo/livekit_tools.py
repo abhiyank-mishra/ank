@@ -59,6 +59,25 @@ FILE_CATEGORIES = {
 # 🟢 SYSTEM CONTROL
 # ══════════════════════════════════════════
 
+@llm.function_tool(description="Toggle your own sleep/mute mode. If the user tells you to sleep, call this tool and then act as if asleep.")
+async def toggle_sleep() -> str:
+    """Toggle the agent's sleep state."""
+    state_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
+    current = False
+    if os.path.exists(state_file):
+        try:
+            with open(state_file, "r", encoding="utf-8") as f:
+                current = json.load(f).get("is_sleeping", False)
+        except Exception: pass
+    
+    new_state = not current
+    try:
+        with open(state_file, "w", encoding="utf-8") as f:
+            json.dump({"is_sleeping": new_state}, f)
+        return f"Sleep state toggled to {new_state}."
+    except Exception as e:
+        return f"Failed to toggle sleep mode: {e}"
+
 @llm.function_tool(description="Shutdown the computer immediately. You MUST explicitly ask the user the security question 'What is your best AI agent's name?' before calling this tool. DO NOT guess the answer yourself.")
 async def shutdown(answer: str) -> str:
     """Shutdown the computer. Requires security answer.
