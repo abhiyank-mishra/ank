@@ -4,7 +4,12 @@ import venv
 import subprocess
 import shutil
 from pathlib import Path
-from setuptools import setup, find_packages
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("⚠️  python-dotenv not installed yet, .env won't be loaded until dependencies are fixed.")
 
 def run_custom_setup():
     """Runs auto-setup process when setup.py is executed directly."""
@@ -100,6 +105,11 @@ if __name__ == "__main__":
         run_custom_setup()
     else:
         # Standard behavior e.g. `pip install -e .`
+        try:
+            from setuptools import setup, find_packages
+        except ImportError:
+            print("❌ setuptools is not installed. Run: pip install setuptools")
+            sys.exit(1)
         setup(
             name="maxo-voice-assistant",
             version="1.0.0",
