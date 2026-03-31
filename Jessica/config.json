@@ -1,9 +1,9 @@
 {
-    "assistant_name": "Ank",
-    "voice": "Charon",
+    "assistant_name": "Jessica",
+    "voice": "Aoede",
     "mcp_servers": [
         {
-            "name": "N8N Ank Server",
+            "name": "N8N Jessica Server",
             "url": "https://n8n.abhiyank.in/mcp/mcp",
             "type": "streamable_http"
         }

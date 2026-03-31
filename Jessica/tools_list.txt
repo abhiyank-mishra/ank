@@ -1,0 +1,287 @@
+======================================================================
+JESSICA AI — ALL TOOLS LIST (108 Total)
+======================================================================
+Decide which tools to KEEP (✅) or REMOVE (❌).
+Too many tools cause API timeouts and latency.
+Recommendation: Keep 30-40 essential tools for best performance.
+======================================================================
+
+
+═══════════════════════════════════════════
+🔴 SYSTEM CONTROL (14 tools)
+═══════════════════════════════════════════
+
+  1. toggle_sleep          — Toggle sleep/mute mode (Jessica/wake word)
+  2. shutdown              — Shutdown computer (with security question)
+  3. restart               — Restart computer (with security question)
+  4. lock_screen           — Lock the screen
+  5. sleep_mode            — Put AI agent to sleep mode (DUPLICATE of toggle_sleep?)
+  6. open_task_manager     — Open Windows Task Manager
+  7. open_control_panel    — Open Windows Control Panel
+  8. open_settings         — Open Windows Settings
+  9. open_cmd              — Open Command Prompt
+ 10. open_powershell       — Open PowerShell
+ 11. open_file_explorer    — Open Windows File Explorer
+ 12. system_info           — Get CPU, RAM, disk, battery status
+ 13. clean_temp            — Clean Windows temp files
+ 14. close_all_apps        — Close all running user apps
+
+
+═══════════════════════════════════════════
+🔵 WINDOW MANAGEMENT (3 tools)
+═══════════════════════════════════════════
+
+ 15. minimize_all          — Minimize all windows (show desktop)
+ 16. maximize_window       — Maximize current window
+ 17. minimize_window       — Minimize current window
+
+
+═══════════════════════════════════════════
+🟢 BROWSER / WEB (12 tools)
+═══════════════════════════════════════════
+
+ 18. open_website          — Open a website by name or URL
+ 19. google_search         — Search Google
+ 20. youtube_search        — Search & play on YouTube
+ 21. open_multiple_tabs    — Open multiple websites at once
+ //22. switch_tab            — Switch to next window
+ 23. close_tab             — Close current window
+ //24. new_tab               — Open new browser tab
+ //25. incognito             — Open incognito browser window
+ 26. refresh_page          — Refresh current page
+ //27. scroll_up             — Scroll up on screen
+ //28. scroll_down           — Scroll down on screen
+ 29. wikipedia_search      — Search Wikipedia for info
+
+
+═══════════════════════════════════════════
+🟡 KEYBOARD / INPUT (7 tools)
+═══════════════════════════════════════════
+
+ //30. paste_clipboard       — Paste from clipboard + Enter
+ 31. copy_clipboard        — Copy selected text
+ //32. type_text             — Type text using keyboard
+ //33. press_key             — Press a key (enter, escape, tab, etc.)
+ //34. hotkey                — Press keyboard shortcut (ctrl+c, alt+tab)
+ 35. select_all            — Select all (Ctrl+A)
+ 36. undo                  — Undo (Ctrl+Z)
+ 37. redo                  — Redo (Ctrl+Y)
+
+
+═══════════════════════════════════════════
+📱 PHONE (ADB) (4 tools)
+═══════════════════════════════════════════
+
+ //38. connect_phone         — Connect to phone via ADB
+ //39. phone_home_button     — Press phone home button via ADB
+ //40. phone_volume_up       — Increase phone volume
+ //41. phone_volume_down     — Decrease phone volume
+ //42. phone_screenshot      — Take phone screenshot via ADB
+
+
+═══════════════════════════════════════════
+📸 SCREEN / CAMERA (4 tools)
+═══════════════════════════════════════════
+
+ 43. take_photo            — Take photo with webcam
+ 44. take_screenshot       — Take screenshot
+ 45. read_screen           — Screenshot + AI vision analysis
+ 46. analyze_screen        — Screenshot + deep error/bug analysis
+
+
+═══════════════════════════════════════════
+⏰ TIME / UTILITY (6 tools)
+═══════════════════════════════════════════
+
+ 47. tell_time             — Tell current time
+ 48. tell_date             — Tell current date
+ 49. set_timer             — Set a timer (N minutes)
+ 50. stopwatch             — Get timestamp for stopwatch
+ 51. calculator            — Calculate math expressions
+ 52. weather               — Open weather for a city
+
+
+═══════════════════════════════════════════
+🌐 TRANSLATE / SEARCH (1 tool)
+═══════════════════════════════════════════
+
+ 53. translate             — Open Google Translate
+
+
+═══════════════════════════════════════════
+📁 FILE MANAGEMENT (5 tools)
+═══════════════════════════════════════════
+
+ 54. search_files          — Search files by name
+ 55. open_file             — Open file with default app
+ 56. organize_files        — Organize files into categorized folders
+ 57. list_files            — List files in a folder
+ 58. create_folder         — Create a new folder
+ 59. file_info             — Get file info (size, type, date)
+
+
+═══════════════════════════════════════════
+🧠 MEMORY / NOTES / REMINDERS (14 tools)
+═══════════════════════════════════════════
+
+ 60. save_memory           — Save key-value fact to memory
+ 61. recall_memory         — Recall memory by key or 'all'
+ 62. save_note             — Save a quick note
+ 63. get_notes             — Get all saved notes
+ 64. clear_notes           — Clear all notes
+ 65. save_reminder         — Save a reminder
+ 66. get_reminders         — Get all active reminders
+ 67. clear_reminders       — Clear all reminders
+ 68. save_important        — Save something as important
+ 69. get_important         — Get all important items
+ 70. get_owner             — Get owner name (always Abhiyank)
+ 71. save_preference       — Save a user preference
+ 72. clear_memory          — Clear conversation memory
+
+
+═══════════════════════════════════════════
+✅ TODO LIST (4 tools)
+═══════════════════════════════════════════
+
+ //73. save_todo             — Add a to-do item
+ //74. get_todos             — Get pending to-do items
+ //75. complete_todo         — Mark to-do complete
+ //76. clear_todos           — Clear all to-do items
+
+
+═══════════════════════════════════════════
+🔧 DEVELOPER (4 tools)
+═══════════════════════════════════════════
+
+ //77. run_command           — Run terminal/shell command
+ 78. open_app              — Open any Windows app by name
+ 79. close_app             — Close an app by name
+ //80. install_package       — Install pip package
+ //81. clone_repo            — Clone GitHub repo to Desktop
+ //82. create_project        — Create project with boilerplate code
+
+
+═══════════════════════════════════════════
+🎵 MEDIA CONTROL (3 tools)
+═══════════════════════════════════════════
+
+ 83. play_pause            — Toggle play/pause for media
+ 84. next_track            — Skip to next track
+ 85. previous_track        — Go to previous track
+
+
+═══════════════════════════════════════════
+🎮 MODES (6 tools)
+═══════════════════════════════════════════
+
+ //86. work_mode             — Opens Gmail, GitHub, VS Code
+ //87. study_mode            — Opens YouTube, Docs, Google
+ //88. chill_mode            — Opens Spotify and YouTube
+ //89. gaming_mode           — Closes heavy apps for performance
+ //90. presentation_mode     — Silences notifications
+ //91. night_mode            — Reduce blue light
+
+
+═══════════════════════════════════════════
+🎯 MISC (6 tools)
+═══════════════════════════════════════════
+
+ //92. daily_briefing        — Time, date, battery, reminders summary
+ 93. whatsapp_message      — Send WhatsApp message via Web
+ //94. set_mode              — Change convo mode (Professional/Friendly/Technical)
+ //95. usage_stats           — Get usage stats of most used commands
+ //96. wifi_status           — Get WiFi status & signal strength
+ 97. ip_address            — Get local & public IP address
+
+
+═══════════════════════════════════════════
+🔍 VOLUME & DISPLAY (5 tools)
+═══════════════════════════════════════════
+
+ 98. volume_up             — Increase volume (steps)
+ 99. volume_down           — Decrease volume (steps)
+100. set_volume            — Set volume to specific %
+101. volume_mute           — Toggle mute/unmute
+102. brightness            — Set screen brightness 0-100
+
+
+═══════════════════════════════════════════
+🗑️ CLEANUP (2 tools)
+═══════════════════════════════════════════
+
+103. empty_recycle_bin     — Empty recycle bin
+//104. disk_space            — Get disk space on all drives
+
+
+═══════════════════════════════════════════
+📊 SYSTEM STATUS (3 tools)
+═══════════════════════════════════════════
+
+105. battery_status        — Battery charge & time remaining
+106. uptime                — System uptime
+107. running_processes     — Top processes by memory usage
+
+
+═══════════════════════════════════════════
+🌐 INTERNET (1 tool)
+═══════════════════════════════════════════
+
+108. web_search            — Search internet using DuckDuckGo
+
+
+═══════════════════════════════════════════
+💡 RECOMMENDED TOOLS TO REMOVE (low usage / redundant)
+═══════════════════════════════════════════
+
+❌ sleep_mode (#5)           — Duplicate of toggle_sleep
+❌ open_control_panel (#7)   — Rarely used, can use open_settings
+❌ open_cmd (#9)             — Can use run_command instead
+❌ open_powershell (#10)     — Can use run_command instead
+❌ open_multiple_tabs (#21)  — Can use open_website multiple times
+❌ switch_tab (#22)          — Keyboard shortcut, not reliable
+❌ close_tab (#23)           — Keyboard shortcut, not reliable
+❌ new_tab (#24)             — Keyboard shortcut, not reliable
+❌ incognito (#25)           — Rarely used
+❌ refresh_page (#26)        — Keyboard shortcut, not reliable
+❌ scroll_up (#27)           — Not useful in voice context
+❌ scroll_down (#28)         — Not useful in voice context
+❌ paste_clipboard (#30)     — Low level, rarely needed by voice
+❌ copy_clipboard (#31)      — Low level, rarely needed by voice
+❌ type_text (#32)           — Low level, prefer run_command
+❌ press_key (#33)           — Low level, prefer hotkey
+❌ select_all (#35)          — Can use hotkey
+❌ undo (#36)                — Can use hotkey
+❌ redo (#37)                — Can use hotkey
+❌ connect_phone (#38)       — ADB rarely used
+❌ phone_home_button (#39)   — ADB rarely used
+❌ phone_volume_up (#40)     — ADB rarely used
+❌ phone_volume_down (#41)   — ADB rarely used
+❌ phone_screenshot (#42)    — ADB rarely used
+❌ translate (#53)           — Can use open_website
+❌ weather (#52)             — Can use web_search
+❌ wikipedia_search (#29)    — Can use web_search
+❌ organize_files (#56)      — Risky, rarely used
+❌ clear_notes (#64)         — Rarely used
+❌ clear_reminders (#67)     — Rarely used
+❌ save_important (#68)      — Can use save_memory
+❌ get_important (#69)       — Can use recall_memory
+❌ save_preference (#71)     — Can use save_memory
+❌ clear_todos (#76)         — Rarely used
+❌ install_package (#80)     — Can use run_command
+❌ clone_repo (#81)          — Can use run_command
+❌ create_project (#82)      — Rarely used
+❌ study_mode (#87)          — Can use open_website
+❌ chill_mode (#88)          — Can use open_website
+❌ gaming_mode (#89)         — Rarely used
+❌ presentation_mode (#90)   — Rarely used
+❌ night_mode (#91)          — Rarely used
+❌ set_mode (#94)            — Rarely used
+❌ usage_stats (#95)         — Rarely used
+❌ wifi_status (#96)         — Can use system_info
+❌ ip_address (#97)          — Can use run_command
+❌ stopwatch (#50)           — Rarely used
+❌ analyze_screen (#46)      — Duplicate of read_screen
+❌ close_all_apps (#14)      — Risky, rarely used
+
+Removing these 47 tools would leave ~61 tools. For BEST PERFORMANCE,
+aim for 30-40 tools.

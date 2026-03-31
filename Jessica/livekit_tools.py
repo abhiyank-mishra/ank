@@ -1,4 +1,4 @@
-# livekit_tools.py — Ank Tools for LiveKit Agents
+# livekit_tools.py — Jessica Tools for LiveKit Agents
 # All tools adapted for LiveKit's @function_tool decorator
 # Uses docstrings for parameter descriptions (parsed by docstring_parser)
 # Owner: Abhiyank
@@ -39,7 +39,7 @@ WEBSITE_MAP = {
     "zoom": "https://zoom.us/",
     "reddit": "https://www.reddit.com/",
     "linkedin": "https://www.linkedin.com/",
-    "chatgpt": "https://chat.openai.com/",
+    "chatgpt": "https://chatgpt.com/",
     "amazon": "https://www.amazon.in/",
     "netflix": "https://www.netflix.com/",
 }
@@ -59,7 +59,7 @@ FILE_CATEGORIES = {
 # 🟢 SYSTEM CONTROL
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Toggle your own sleep/mute mode. If the user tells you to sleep, call this tool and then act as if asleep.")
+@llm.function_tool(description="Toggle your own sleep/mute mode. Call this tool if the user says 'sleep', OR if they wake you up with your wake word 'Jessica'.")
 async def toggle_sleep() -> str:
     """Toggle the agent's sleep state."""
     state_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
@@ -110,11 +110,16 @@ async def lock_screen() -> str:
     pyautogui.hotkey('win', 'l')
     return "Screen locked, Sir."
 
-@llm.function_tool(description="Put the computer to sleep mode")
+@llm.function_tool(description="Put the AI agent to sleep mode (mute mode)")
 async def sleep_mode() -> str:
-    """Put the computer to sleep."""
-    os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
-    return "Going to sleep, Sir."
+    """Put the AI agent to sleep."""
+    state_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
+    try:
+        with open(state_file, "w", encoding="utf-8") as f:
+            json.dump({"is_sleeping": True}, f)
+        return "Going to sleep, Sir. (Agent is now asleep)"
+    except Exception as e:
+        return f"Failed to sleep agent: {e}"
 
 @llm.function_tool(description="Open Windows Task Manager")
 async def open_task_manager() -> str:
@@ -217,18 +222,6 @@ async def empty_recycle_bin() -> str:
                    timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
     return "Recycle bin emptied, Sir."
 
-@llm.function_tool(description="Get disk space on all drives")
-async def disk_space() -> str:
-    """Get disk space info."""
-    parts = psutil.disk_partitions()
-    info = []
-    for p in parts:
-        try:
-            u = psutil.disk_usage(p.mountpoint)
-            info.append(f"{p.device} {u.free/(1024**3):.1f}GB free of {u.total/(1024**3):.1f}GB")
-        except: pass
-    return "Disk space: " + ", ".join(info)
-
 @llm.function_tool(description="Get battery charge level and time remaining")
 async def battery_status() -> str:
     """Get battery status."""
@@ -324,18 +317,23 @@ async def brightness(level: int = 50) -> str:
 # 🌐 WEB & BROWSER
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Open a website by name like youtube, github, instagram, or a URL")
+@llm.function_tool(description="Open a website by name like youtube, github, instagram, or a URL.")
 async def open_website(app_name: str) -> str:
-    """Open a website.
+    """Open a website in Chrome browser.
 
     Args:
         app_name: Website name (youtube, github, etc.) or full URL
     """
     name = app_name.lower().strip()
     url = WEBSITE_MAP.get(name)
-    if url: webbrowser.open(url)
-    elif name.startswith("http"): webbrowser.open(name)
-    else: webbrowser.open(f"https://www.{name}.com/")
+    if not url:
+        url = name if name.startswith("http") else f"https://www.{name}.com/"
+    
+    # Force Chrome to avoid YouTube PWA or other app intercepting
+    try:
+        subprocess.Popen(f'start chrome "{url}"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception:
+        webbrowser.open(url)
     return f"Opening {app_name}."
 
 @llm.function_tool(description="Search Google for something")
@@ -348,9 +346,9 @@ async def google_search(query: str) -> str:
     webbrowser.open(f"https://www.google.com/search?q={query}")
     return f"Searching: {query}"
 
-@llm.function_tool(description="Search and play something on YouTube. It will find the top result and auto-play it.")
+@llm.function_tool(description="Search and play something on YouTube.")
 async def youtube_search(query: str) -> str:
-    """Search and play on YouTube.
+    """Search and play on YouTube in Chrome browser.
 
     Args:
         query: Song, video, or topic to play
@@ -359,20 +357,26 @@ async def youtube_search(query: str) -> str:
         import urllib.request
         import urllib.parse
         import re
-        # Search YouTube and find the first video ID
+        
         search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}"
         html = urllib.request.urlopen(search_url).read().decode('utf-8')
-        # Find the first video ID in the search results
         video_ids = re.findall(r'watch\?v=([a-zA-Z0-9_-]{11})', html)
-        if video_ids:
-            webbrowser.open(f"https://www.youtube.com/watch?v={video_ids[0]}")
-            return f"Playing '{query}' on YouTube."
-        else:
-            webbrowser.open(search_url)
-            return f"Showing search results for '{query}' on YouTube."
+        target_url = f"https://www.youtube.com/watch?v={video_ids[0]}" if video_ids else search_url
+        
+        # Force Chrome to avoid YouTube PWA intercepting the URL
+        try:
+            subprocess.Popen(f'start chrome "{target_url}"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        except Exception:
+            webbrowser.open(target_url)
+        
+        return f"Playing '{query}' on YouTube." if video_ids else f"Showing results for '{query}' on YouTube."
     except Exception:
-        webbrowser.open(f"https://www.youtube.com/results?search_query={query}")
-        return f"Showing search results for '{query}' on YouTube."
+        url = f"https://www.youtube.com/results?search_query={query}"
+        try:
+            subprocess.Popen(f'start chrome "{url}"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        except Exception:
+            webbrowser.open(url)
+        return f"Showing results for '{query}' on YouTube."
 
 @llm.function_tool(description="Open multiple websites at once, comma separated")
 async def open_multiple_tabs(sites: str) -> str:
@@ -389,55 +393,17 @@ async def open_multiple_tabs(sites: str) -> str:
         time.sleep(0.3)
     return "Tabs opened."
 
-@llm.function_tool(description="Switch to the next window")
-async def switch_tab() -> str:
-    """Switch window."""
-    pyautogui.hotkey('alt', 'esc')
-    return "Switched."
-
 @llm.function_tool(description="Close the current window")
 async def close_tab() -> str:
     """Close current window."""
     pyautogui.hotkey('alt', 'f4')
     return "Closed."
 
-@llm.function_tool(description="Open a new browser tab")
-async def new_tab() -> str:
-    """Open new tab."""
-    pyautogui.hotkey('ctrl', 't')
-    return "New tab opened."
-
-@llm.function_tool(description="Open incognito/private browser window")
-async def incognito() -> str:
-    """Open incognito."""
-    pyautogui.hotkey('ctrl', 'shift', 'n')
-    return "Incognito opened."
-
 @llm.function_tool(description="Refresh the current browser page")
 async def refresh_page() -> str:
     """Refresh page."""
     pyautogui.hotkey('f5')
     return "Page refreshed."
-
-@llm.function_tool(description="Scroll up on screen")
-async def scroll_up(times: int = 5) -> str:
-    """Scroll up.
-
-    Args:
-        times: Number of scroll steps
-    """
-    pyautogui.scroll(times)
-    return "Scrolled up."
-
-@llm.function_tool(description="Scroll down on screen")
-async def scroll_down(times: int = 5) -> str:
-    """Scroll down.
-
-    Args:
-        times: Number of scroll steps
-    """
-    pyautogui.scroll(-times)
-    return "Scrolled down."
 
 @llm.function_tool(description="Search Wikipedia for information about a topic")
 async def wikipedia_search(query: str) -> str:
@@ -450,12 +416,6 @@ async def wikipedia_search(query: str) -> str:
         import wikipedia; return wikipedia.summary(query, sentences=2)
     except: return "Couldn't find that on Wikipedia."
 
-@llm.function_tool(description="Paste from clipboard and press Enter")
-async def paste_clipboard() -> str:
-    """Paste clipboard."""
-    pyautogui.hotkey('ctrl', 'v'); pyautogui.press('enter')
-    return "Pasted."
-
 @llm.function_tool(description="Copy selected text to clipboard")
 async def copy_clipboard() -> str:
     """Copy to clipboard."""
@@ -466,36 +426,6 @@ async def copy_clipboard() -> str:
 # ══════════════════════════════════════════
 # ⌨️ INPUT AUTOMATION
 # ══════════════════════════════════════════
-
-@llm.function_tool(description="Type text using the keyboard")
-async def type_text(text: str) -> str:
-    """Type text.
-
-    Args:
-        text: The text to type
-    """
-    pyautogui.write(text, interval=0.02)
-    return f"Typed: {text[:50]}"
-
-@llm.function_tool(description="Press a keyboard key like enter, escape, tab, space")
-async def press_key(key: str) -> str:
-    """Press a key.
-
-    Args:
-        key: Key to press like enter, escape, tab, space
-    """
-    pyautogui.press(key)
-    return f"Pressed {key}"
-
-@llm.function_tool(description="Press a keyboard shortcut like ctrl+c, alt+tab")
-async def hotkey(keys: str) -> str:
-    """Press a hotkey combination.
-
-    Args:
-        keys: Keys separated by + like ctrl+c, alt+tab
-    """
-    pyautogui.hotkey(*[k.strip() for k in keys.split("+")])
-    return f"Pressed {keys}"
 
 @llm.function_tool(description="Select all content (Ctrl+A)")
 async def select_all() -> str:
@@ -519,38 +449,6 @@ async def redo() -> str:
 # ══════════════════════════════════════════
 # 📱 PHONE CONTROL (ADB)
 # ══════════════════════════════════════════
-
-@llm.function_tool(description="Connect to phone via ADB")
-async def connect_phone() -> str:
-    """Connect to phone."""
-    os.system("adb connect 192.168.29.193:5555")
-    return "Connecting to phone."
-
-@llm.function_tool(description="Press phone home button via ADB")
-async def phone_home_button() -> str:
-    """Press phone home button."""
-    os.system("adb shell input keyevent 3")
-    return "Home pressed."
-
-@llm.function_tool(description="Increase phone volume via ADB")
-async def phone_volume_up() -> str:
-    """Phone volume up."""
-    os.system("adb shell input keyevent 24")
-    return "Phone volume up."
-
-@llm.function_tool(description="Decrease phone volume via ADB")
-async def phone_volume_down() -> str:
-    """Phone volume down."""
-    os.system("adb shell input keyevent 25")
-    return "Phone volume down."
-
-@llm.function_tool(description="Take a phone screenshot via ADB")
-async def phone_screenshot() -> str:
-    """Take phone screenshot."""
-    os.system("adb shell screencap -p /sdcard/screenshot.png")
-    os.system('adb pull /sdcard/screenshot.png "screenshot.png"')
-    return "Phone screenshot taken."
-
 
 # ══════════════════════════════════════════
 # 📸 VISION & SCREEN
@@ -590,7 +488,7 @@ async def read_screen(query: str = "What is on this screen?") -> str:
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
         model = genai.GenerativeModel('gemini-2.0-flash')
         img = Image.open(path)
-        resp = model.generate_content([f"You are Ank, analyzing a screenshot. TASK: {query}. Be concise. Address user as Sir.", img])
+        resp = model.generate_content([f"You are Jessica, analyzing a screenshot. TASK: {query}. Be concise. Address user as Sir.", img])
         return f"Screen Analysis: {resp.text}"
     except Exception as e: return f"Vision Error: {e}"
 
@@ -609,7 +507,7 @@ async def analyze_screen(query: str = "Find any errors on screen.") -> str:
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
         model = genai.GenerativeModel('gemini-2.0-flash')
         img = Image.open(path)
-        resp = model.generate_content([f"You are Ank, expert technician. TASK: {query}. Cover errors, diagnosis, fix commands. Concise. Address Sir.", img])
+        resp = model.generate_content([f"You are Jessica, expert technician. TASK: {query}. Cover errors, diagnosis, fix commands. Concise. Address Sir.", img])
         return f"Technical Analysis: {resp.text}"
     except Exception as e: return f"Vision Error: {e}"
 
@@ -891,66 +789,9 @@ async def save_preference(key: str, value: str) -> str:
 # ✅ TO-DO LIST
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Add a new to-do item")
-async def save_todo(text: str) -> str:
-    """Add to-do.
-
-    Args:
-        text: To-do item text
-    """
-    from utils.memory import _load_memory, _save_memory
-    mem = _load_memory()
-    mem.setdefault("todos", []).append({"text": text, "done": False, "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")})
-    _save_memory(mem)
-    return f"Added to-do: {text}"
-
-@llm.function_tool(description="Get all pending to-do items")
-async def get_todos() -> str:
-    """Get to-dos."""
-    from utils.memory import _load_memory
-    todos = [t for t in _load_memory().get("todos", []) if not t.get("done")]
-    if not todos: return "To-do list is empty, Sir."
-    return "To-dos:\n" + "\n".join([f"  ☐ {t['text']}" for t in todos])
-
-@llm.function_tool(description="Mark a to-do item as complete")
-async def complete_todo(text: str) -> str:
-    """Complete a to-do.
-
-    Args:
-        text: To-do keyword to match
-    """
-    from utils.memory import _load_memory, _save_memory
-    mem = _load_memory()
-    for t in mem.get("todos", []):
-        if text.lower() in t["text"].lower() and not t.get("done"):
-            t["done"] = True; _save_memory(mem); return f"Completed: {t['text']}"
-    return "No matching to-do found."
-
-@llm.function_tool(description="Clear all to-do items")
-async def clear_todos() -> str:
-    """Clear to-dos."""
-    from utils.memory import _load_memory, _save_memory
-    mem = _load_memory(); mem["todos"] = []; _save_memory(mem)
-    return "To-do list cleared."
-
-
 # ══════════════════════════════════════════
 # 💻 DEVELOPER MODE
 # ══════════════════════════════════════════
-
-@llm.function_tool(description="Run a terminal/shell command and return output")
-async def run_command(command: str) -> str:
-    """Run a shell command.
-
-    Args:
-        command: The command to run
-    """
-    try:
-        r = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
-        out = r.stdout.strip() or r.stderr.strip()
-        return out[:300] if out else "Command executed."
-    except subprocess.TimeoutExpired: return "Timed out."
-    except Exception as e: return f"Error: {e}"
 
 @llm.function_tool(description="Open any Windows application by name")
 async def open_app(app_name: str) -> str:
@@ -975,51 +816,6 @@ async def close_app(app_name: str) -> str:
     """
     r = subprocess.run(f'taskkill /IM "{app_name}.exe" /F', shell=True, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
     return f"Closed {app_name}." if "SUCCESS" in r.stdout else f"Attempted to close {app_name}."
-
-@llm.function_tool(description="Install a Python pip package")
-async def install_package(package: str) -> str:
-    """Install pip package.
-
-    Args:
-        package: Package name to install
-    """
-    r = subprocess.run(f"pip install {package}", shell=True, capture_output=True, text=True, timeout=60, creationflags=subprocess.CREATE_NO_WINDOW)
-    if "Successfully installed" in r.stdout: return f"Installed {package}."
-    if "already satisfied" in r.stdout: return f"{package} already installed."
-    return r.stdout[:200] or r.stderr[:200]
-
-@llm.function_tool(description="Clone a GitHub repository to Desktop")
-async def clone_repo(repo: str) -> str:
-    """Clone a GitHub repo.
-
-    Args:
-        repo: GitHub repo URL or user/repo format
-    """
-    if not repo.startswith("http"): repo = f"https://github.com/{repo}.git"
-    dest = os.path.join(os.path.expanduser("~"), "Desktop")
-    r = subprocess.run(f'git clone {repo}', shell=True, capture_output=True, text=True, timeout=60, cwd=dest, creationflags=subprocess.CREATE_NO_WINDOW)
-    return "Cloned to Desktop." if r.returncode == 0 else r.stderr[:200]
-
-@llm.function_tool(description="Create a new project with boilerplate code")
-async def create_project(project_type: str = "python", name: str = "my_project") -> str:
-    """Create a project boilerplate.
-
-    Args:
-        project_type: Type - 'python' or 'web'
-        name: Project name
-    """
-    base = os.path.join(os.path.expanduser("~"), "Desktop", name)
-    os.makedirs(base, exist_ok=True)
-    if "python" in project_type.lower():
-        with open(os.path.join(base, "main.py"), "w") as f:
-            f.write(f'def main():\n    print("Hello from {name}!")\n\nif __name__ == "__main__":\n    main()\n')
-        return f"Python project '{name}' created on Desktop."
-    elif "web" in project_type.lower():
-        with open(os.path.join(base, "index.html"), "w") as f:
-            f.write(f'<!DOCTYPE html><html><head><title>{name}</title></head><body><h1>{name}</h1></body></html>')
-        return f"Web project '{name}' created on Desktop."
-    return f"Unknown type '{project_type}'."
-
 
 # ══════════════════════════════════════════
 # 🎵 MEDIA CONTROL
@@ -1048,69 +844,6 @@ async def previous_track() -> str:
 # 🔄 SMART AUTOMATION MODES
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Activate work mode — opens Gmail, GitHub, VS Code")
-async def work_mode() -> str:
-    """Start work mode."""
-    webbrowser.open("https://mail.google.com/"); time.sleep(0.5)
-    webbrowser.open("https://github.com/"); time.sleep(0.5)
-    try: subprocess.Popen('code', shell=True)
-    except: pass
-    return "Work mode activated."
-
-@llm.function_tool(description="Activate study mode — opens YouTube, Docs, Google")
-async def study_mode() -> str:
-    """Start study mode."""
-    for url in ["https://www.youtube.com/", "https://docs.google.com/", "https://www.google.com/"]:
-        webbrowser.open(url); time.sleep(0.5)
-    return "Study mode activated."
-
-@llm.function_tool(description="Activate chill mode — opens Spotify and YouTube")
-async def chill_mode() -> str:
-    """Start chill mode."""
-    webbrowser.open("https://open.spotify.com/"); time.sleep(0.5)
-    webbrowser.open("https://www.youtube.com/")
-    return "Chill mode activated."
-
-@llm.function_tool(description="Activate gaming mode — closes heavy apps for performance")
-async def gaming_mode() -> str:
-    """Start gaming mode."""
-    for app in ["chrome.exe", "msedge.exe", "Teams.exe", "Slack.exe", "discord.exe"]:
-        try: subprocess.run(f'taskkill /IM "{app}" /F', shell=True, capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        except: pass
-    return "Gaming mode activated!"
-
-@llm.function_tool(description="Activate presentation mode — silences notifications")
-async def presentation_mode() -> str:
-    """Start presentation mode."""
-    pyautogui.hotkey('win', 'a'); time.sleep(0.5); pyautogui.press('escape')
-    return "Presentation mode enabled."
-
-@llm.function_tool(description="Enable night mode — reduce blue light for eye comfort")
-async def night_mode() -> str:
-    """Enable night mode."""
-    try:
-        subprocess.run(["powershell", "-NoProfile", "-Command",
-            "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction.bluelightreductionstate\\windows.data.bluelightreduction.bluelightreductionstate' -Name 'Data' -Value ([byte[]](2,0,0,0,10,0,0,0,6,0,0,0,1,0))"],
-            timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
-        return "Night mode enabled."
-    except: return "Attempted night mode."
-
-@llm.function_tool(description="Get a daily briefing: time, date, battery, system status, reminders")
-async def daily_briefing() -> str:
-    """Generate daily briefing."""
-    from utils.memory import get_reminders, get_notes
-    now = datetime.datetime.now()
-    parts = [f"Good {'morning' if now.hour<12 else 'afternoon' if now.hour<17 else 'evening'}, Sir.",
-             f"It's {now.strftime('%A, %B %d, %Y')} at {now.strftime('%I:%M %p')}."]
-    try:
-        b = psutil.sensors_battery()
-        if b: parts.append(f"Battery: {b.percent}% ({'plugged in' if b.power_plugged else 'on battery'}).")
-    except: pass
-    parts.append(f"CPU: {psutil.cpu_percent(interval=0.3)}%, RAM: {psutil.virtual_memory().percent}%.")
-    r = get_reminders()
-    parts.append(r if "No active" not in r else "No pending reminders.")
-    return " ".join(parts)
-
 @llm.function_tool(description="Send a WhatsApp message via WhatsApp Web")
 async def whatsapp_message(contact: str = "", message: str = "") -> str:
     """Send WhatsApp message.
@@ -1125,35 +858,6 @@ async def whatsapp_message(contact: str = "", message: str = "") -> str:
         return "Opening WhatsApp."
     webbrowser.open("https://web.whatsapp.com/")
     return "Opened WhatsApp Web."
-
-@llm.function_tool(description="Change conversation mode: Professional, Friendly, or Technical")
-async def set_mode(mode: str = "Professional") -> str:
-    """Set conversation mode.
-
-    Args:
-        mode: Mode name - Professional, Friendly, or Technical
-    """
-    from utils.memory import save_preference
-    save_preference("conversation_mode", mode.capitalize())
-    return f"Mode set to {mode}."
-
-@llm.function_tool(description="Get usage statistics of most used commands")
-async def usage_stats() -> str:
-    """Get usage stats."""
-    from utils.context import get_usage_stats; return get_usage_stats()
-
-@llm.function_tool(description="Get WiFi connection status and signal strength")
-async def wifi_status() -> str:
-    """Get WiFi status."""
-    r = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
-    info = {}
-    for line in r.stdout.split('\n'):
-        if ':' in line:
-            k, _, v = line.partition(':')
-            k, v = k.strip().lower(), v.strip()
-            if 'ssid' in k and 'bssid' not in k: info['network'] = v
-            elif 'signal' in k: info['signal'] = v
-    return f"WiFi: {info.get('network', '?')} ({info.get('signal', '?')})" if info else "Not connected."
 
 @llm.function_tool(description="Get local and public IP address")
 async def ip_address() -> str:
@@ -1200,6 +904,49 @@ async def web_search(query: str) -> str:
     except Exception as e:
         return f"Search error: {e}"
 
+# ── Type Text (type anywhere) ──
+
+@llm.function_tool(description="Type text into the currently focused input field, chat box, or text area. Works with any app — ChatGPT, WhatsApp, Notepad, etc. Use this when the user says 'type', 'likh do', 'type karo', etc.")
+async def type_text(text: str) -> str:
+    """Type the given text into the active window.
+    
+    Args:
+        text: The text to type into the focused input field.
+    """
+    try:
+        import pyperclip
+        import time as _time
+        # Save current clipboard
+        try:
+            old_clip = pyperclip.paste()
+        except Exception:
+            old_clip = ""
+        # Copy text to clipboard, paste it (supports Unicode/Hindi)
+        pyperclip.copy(text)
+        _time.sleep(0.1)
+        pyautogui.hotkey("ctrl", "v")
+        _time.sleep(0.3)
+        # Restore old clipboard
+        try:
+            pyperclip.copy(old_clip)
+        except Exception:
+            pass
+        return f"Typed: {text}"
+    except ImportError:
+        return "pyperclip not installed. Run: pip install pyperclip"
+    except Exception as e:
+        return f"Failed to type: {e}"
+
+
+@llm.function_tool(description="Press Enter key to send/submit the typed message. Use after type_text when user says 'send it', 'bhej do', 'enter daba do', etc.")
+async def press_enter() -> str:
+    """Press the Enter key to submit."""
+    try:
+        pyautogui.press("enter")
+        return "Enter pressed — message sent."
+    except Exception as e:
+        return f"Failed: {e}"
+
 
 # ══════════════════════════════════════════
 # 📋 COLLECT ALL TOOLS INTO A LIST
@@ -1207,24 +954,21 @@ async def web_search(query: str) -> str:
 
 ALL_TOOLS = [
     # System
-    shutdown, restart, lock_screen, sleep_mode,
+    toggle_sleep, shutdown, restart, lock_screen, sleep_mode,
     open_task_manager, open_control_panel, open_settings,
     open_cmd, open_powershell, open_file_explorer,
     system_info, clean_temp, close_all_apps,
     minimize_all, maximize_window, minimize_window,
-    empty_recycle_bin, disk_space, battery_status, uptime, running_processes,
+    empty_recycle_bin, battery_status, uptime, running_processes,
     # Volume & Display
     volume_up, volume_down, set_volume, volume_mute, brightness,
     # Web & Browser
     open_website, google_search, youtube_search, open_multiple_tabs,
-    switch_tab, close_tab, new_tab, incognito, refresh_page,
-    scroll_up, scroll_down, wikipedia_search, paste_clipboard, copy_clipboard,
+    close_tab, refresh_page, wikipedia_search, copy_clipboard,
     # Web Search
     web_search,
-    # Input
-    type_text, press_key, hotkey, select_all, undo, redo,
-    # Phone
-    connect_phone, phone_home_button, phone_volume_up, phone_volume_down, phone_screenshot,
+    # Input & Typing
+    select_all, undo, redo, type_text, press_enter,
     # Vision
     take_photo, take_screenshot, read_screen, analyze_screen,
     # Productivity
@@ -1235,15 +979,10 @@ ALL_TOOLS = [
     save_memory, recall_memory, save_note, get_notes, clear_notes,
     save_reminder, get_reminders, clear_reminders,
     save_important, get_important, get_owner, save_preference,
-    # To-Do
-    save_todo, get_todos, complete_todo, clear_todos,
-    # Developer
-    run_command, open_app, close_app, install_package, clone_repo, create_project,
+    # Apps
+    open_app, close_app,
     # Media
     play_pause, next_track, previous_track,
-    # Automation
-    work_mode, study_mode, chill_mode, gaming_mode, presentation_mode, night_mode,
-    daily_briefing, whatsapp_message, set_mode, usage_stats, wifi_status, ip_address,
-    clear_memory,
+    # Misc
+    whatsapp_message, ip_address, clear_memory,
 ]
-

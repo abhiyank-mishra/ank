@@ -1,4 +1,4 @@
-# utils/context.py — Context Awareness & Learning System for Maxo
+# utils/context.py — Context Awareness & Learning System for Jessica
 # Tracks active window, learns usage patterns, provides smart suggestions
 
 import ctypes
@@ -60,7 +60,7 @@ def get_context_string():
         "Telegram": "Telegram",
         "WhatsApp": "WhatsApp",
         "python": "Python",
-        "pythonw": "Maxo (self)",
+        "pythonw": "Jessica (self)",
     }
     
     friendly = APP_NAMES.get(process_name, process_name)

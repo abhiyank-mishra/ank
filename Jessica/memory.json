@@ -1,0 +1,25 @@
+{
+  "owner": "Abhiyank",
+  "owner_protected": true,
+  "created_at": "2026-03-29T17:40:41.926571",
+  "facts": {
+    "owner_name": "Abhiyank",
+    "assistant_name": "Jessica",
+    "assistant_creator": "Abhiyank",
+    "persona": "Jessica, professional yet friendly, like J.A.R.V.I.S.",
+    "last_updated": "2026-03-29T18:38:53.841837",
+    "College": "GLA College",
+    "Friend - Chirag": "Slightly short in height",
+    "Friend - Vaibhav": "Slightly dark complexion"
+  },
+  "notes": [],
+  "reminders": [
+    {
+      "text": "Preparation for Code-a-thon at 12:20 PM",
+      "timestamp": "2026-04-01 00:15",
+      "done": false
+    }
+  ],
+  "preferences": {},
+  "important": []
+}

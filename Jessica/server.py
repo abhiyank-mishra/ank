@@ -1,5 +1,5 @@
 """
-Ank Web Server — Serves the web UI and provides LiveKit token + settings API.
+Jessica Web Server — Serves the web UI and provides LiveKit token + settings API.
 Owner: Abhiyank
 """
 
@@ -32,7 +32,7 @@ def load_config():
         with open(CONFIG_PATH, "r") as f:
             return json.load(f)
     except Exception:
-        return {"voice": "Charon", "assistant_name": "Ank", "owner": "Abhiyank", "mcp_servers": []}
+        return {"voice": "Charon", "assistant_name": "Jessica", "owner": "Abhiyank", "mcp_servers": []}
 
 
 def save_config(data):
@@ -45,7 +45,7 @@ async def handle_token(request):
     from livekit import api
 
     data = await request.json()
-    room_name = data.get("room", f"ank-room-{int(time.time())}")
+    room_name = data.get("room", f"jessica-room-{int(time.time())}")
     identity = data.get("identity", "Abhiyank")
 
     token = (
@@ -199,15 +199,15 @@ def start_agent_process():
 
 
 if __name__ == "__main__":
-    PORT = int(os.getenv("ANK_PORT", 3000))
+    PORT = int(os.getenv("JESSICA_PORT", 3000))
     print(f"\n╔══════════════════════════════════════╗")
-    print(f"  ║    Ank Web Server — v2.0             ║")
+    print(f"  ║    Jessica Web Server — v2.0             ║")
     print(f"  ║    http://localhost:{PORT}           ║")
     print(f"  ║    Owner: Abhiyank                   ║")
     print(f"  ╚══════════════════════════════════════╝\n")
 
     # Auto-start agent
-    print("  🚀 Auto-starting Ank Agent...")
+    print("  🚀 Auto-starting Jessica Agent...")
     start_agent_process()
 
     app = create_app()

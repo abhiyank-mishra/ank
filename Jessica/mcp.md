@@ -1,9 +1,9 @@
-# MCP Server Integration Guide for Ank
+# MCP Server Integration Guide for Jessica
 
 ## What is MCP?
 MCP (Model Context Protocol) is a standard that connects AI agents with external tools and data sources. It allows your agent to dynamically discover and execute tools exposed by external servers.
 
-## How MCP Works in Ank
+## How MCP Works in Jessica
 1. MCP server URLs are stored in `config.json` under `mcp_servers`
 2. When the agent starts, it connects to each MCP server automatically
 3. The tools from those servers appear alongside your existing tools
@@ -21,7 +21,7 @@ MCP (Model Context Protocol) is a standard that connects AI agents with external
 - Example: `npx -y @modelcontextprotocol/server-filesystem /path/to/dir`
 
 ## Adding MCP Servers
-Add MCP servers via the Ank Web UI Settings panel:
+Add MCP servers via the Jessica Web UI Settings panel:
 1. Click the ⚙️ gear icon
 2. Go to the "MCP Servers" section
 3. Enter server name, URL, and type (sse/stdio)

@@ -1,14 +1,14 @@
 @echo off
-title Ank LiveKit Agent
+title Jessica LiveKit Agent
 cd /d "%~dp0"
 call ..\venv\Scripts\activate
 echo.
 echo =============================================
-echo   ANK LiveKit Voice Agent
+echo   JESSICA LiveKit Voice Agent
 echo   Owner: Abhiyank
 echo =============================================
 echo.
-echo Starting Ank LiveKit Agent in DEV mode...
+echo Starting Jessica LiveKit Agent in DEV mode...
 echo (Uses Gemini Realtime - speech to speech)
 echo.
 echo To test locally with mic/speaker: python livekit_agent.py console

@@ -1,5 +1,5 @@
 """
-Ank AI — Floating Desktop Widget + Background Agent Launcher
+Jessica AI — Floating Desktop Widget + Background Agent Launcher
 Personality switching, voice control, auto-restart.
 Only one instance can run at a time.
 """
@@ -18,11 +18,11 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont
 # Paths
 SCRIPT_DIR = Path(__file__).parent
 ICON_PATH = SCRIPT_DIR / "logo.png"
-FALLBACK_ICON = SCRIPT_DIR / "maxo_icon.ico"
+FALLBACK_ICON = SCRIPT_DIR / "jessica_icon.ico"
 VENV_PYTHON = SCRIPT_DIR.parent / "venv" / "Scripts" / "python.exe"
 AGENT_SCRIPT = SCRIPT_DIR / "livekit_agent.py"
-LOG_FILE = SCRIPT_DIR / "ank_agent.log"
-LOCK_FILE = SCRIPT_DIR / "ank.lock"
+LOG_FILE = SCRIPT_DIR / "jessica_agent.log"
+LOCK_FILE = SCRIPT_DIR / "jessica.lock"
 PERSONALITIES_PATH = SCRIPT_DIR / "personalities.json"
 CONFIG_PATH = SCRIPT_DIR / "config.json"
 STATE_PATH = SCRIPT_DIR / "state.json"
@@ -40,7 +40,7 @@ def load_personalities():
         with open(PERSONALITIES_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return {"active": "ank", "profiles": {}}
+        return {"active": "jessica", "profiles": {}}
 
 
 def save_active_personality(persona_id):
@@ -52,7 +52,7 @@ def save_active_personality(persona_id):
 
 def get_active_profile():
     data = load_personalities()
-    active = data.get("active", "ank")
+    active = data.get("active", "jessica")
     profile = data.get("profiles", {}).get(active, {})
     return active, profile
 
@@ -105,11 +105,11 @@ class FloatingAnk:
 
         # Load active personality
         self.active_id, self.active_profile = get_active_profile()
-        self.glow_color = tuple(self.active_profile.get("glow_color", [0, 230, 120]))
+        self.glow_color = tuple(self.active_profile.get("glow_color", [42, 73, 122]))
 
         # --- Tkinter Window ---
         self.root = tk.Tk()
-        self.root.title("Ank AI")
+        self.root.title("Jessica AI")
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-transparentcolor", "#010101")
@@ -133,10 +133,22 @@ class FloatingAnk:
         self._load_icon()
         self._draw_widget()
 
-        # Sleep toggle button
+        # Sleep toggle button — shows green dot when awake, zzz when sleeping
+        is_sleeping = False
+        if STATE_PATH.exists():
+            try:
+                with open(STATE_PATH, "r", encoding="utf-8") as f:
+                    is_sleeping = json.load(f).get("is_sleeping", False)
+            except Exception: pass
+        
         self.sleep_btn = tk.Button(
-            self.root, text="💤", font=("Segoe UI", 8),
-            bg="#1a1a2e", fg="#ffffff", bd=0, activebackground="#ffab40",
+            self.root,
+            text="💤" if is_sleeping else "●",
+            font=("Segoe UI", 8),
+            bg="#1a1a2e",
+            fg="#ff5252" if is_sleeping else "#00e676",
+            bd=0,
+            activebackground="#ffab40",
             command=self._toggle_sleep
         )
         self.sleep_btn.place(x=GLOW_SIZE - 22, y=0, width=22, height=22)
@@ -164,7 +176,7 @@ class FloatingAnk:
         persona_menu = Menu(self.menu, tearoff=0, font=("Segoe UI", 10))
         data = load_personalities()
         profiles = data.get("profiles", {})
-        active = data.get("active", "ank")
+        active = data.get("active", "jessica")
 
         for pid, profile in profiles.items():
             name = profile.get("name", pid)
@@ -193,7 +205,7 @@ class FloatingAnk:
 
         # Update local state
         self.active_id, self.active_profile = get_active_profile()
-        self.glow_color = tuple(self.active_profile.get("glow_color", [0, 230, 120]))
+        self.glow_color = tuple(self.active_profile.get("glow_color", [42, 73, 122]))
 
         # Rebuild menu to show new active marker
         self._build_menu()
@@ -313,35 +325,45 @@ class FloatingAnk:
         with open(STATE_PATH, "w", encoding="utf-8") as f:
             json.dump({"is_sleeping": new_state}, f)
         
-        self.sleep_btn.config(fg="#ff5252" if new_state else "#ffffff")
-        self._show_tooltip("Entering Sleep (Zzz)" if new_state else "Waking Up", "#ff5252" if new_state else "#00e676")
+        # Update button: zzz when sleeping, green dot when awake
+        self.sleep_btn.config(
+            text="💤" if new_state else "●",
+            fg="#ff5252" if new_state else "#00e676"
+        )
+        self._show_tooltip("Jessica is sleeping 💤" if new_state else "Jessica is awake ●", "#ff5252" if new_state else "#00e676")
 
     # --- Menu ---
     def _show_menu(self, event):
         self.menu.tk_popup(event.x_root, event.y_root)
 
     def _show_tooltip(self, text, color="#00e676"):
-        """Show a temporary tooltip near the widget."""
+        """Show a premium tooltip near the widget with accent border."""
         tip = tk.Toplevel(self.root)
         tip.overrideredirect(True)
         tip.attributes("-topmost", True)
-        tip.configure(bg="#1a1a2e")
+        tip.configure(bg="#2a497a")  # Accent border color
+
+        # Inner frame for content with dark bg
+        inner = tk.Frame(tip, bg="#0d1b2a", padx=2, pady=2)
+        inner.pack(padx=2, pady=2)
 
         label = tk.Label(
-            tip, text=text,
+            inner, text=text,
             font=("Segoe UI", 11, "bold"),
-            fg=color, bg="#1a1a2e",
-            padx=16, pady=8,
+            fg=color, bg="#0d1b2a",
+            padx=18, pady=10,
         )
         label.pack()
 
         wx = self.root.winfo_x()
         wy = self.root.winfo_y()
-        tip.geometry(f"+{wx - 60}+{wy - 45}")
+        tip.geometry(f"+{wx - 80}+{wy - 55}")
+        
+        # Fade out after 2.5 seconds
         tip.after(2500, tip.destroy)
 
     def _show_status(self, event):
-        name = self.active_profile.get("name", "Ank")
+        name = self.active_profile.get("name", "Jessica")
         gender = self.active_profile.get("gender", "?")
         voice = self.active_profile.get("voice", "?")
 

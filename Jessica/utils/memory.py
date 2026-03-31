@@ -1,4 +1,4 @@
-# utils/memory.py — Maxo Persistent Memory System
+# utils/memory.py — Jessica Persistent Memory System
 # Owner: Abhiyank (protected, cannot be changed by voice commands)
 
 import json
@@ -16,7 +16,7 @@ DEFAULT_MEMORY = {
     "created_at": datetime.datetime.now().isoformat(),
     "facts": {
         "owner_name": "Abhiyank",
-        "assistant_name": "Maxo",
+        "assistant_name": "Jessica",
         "assistant_creator": "Abhiyank",
     },
     "notes": [],

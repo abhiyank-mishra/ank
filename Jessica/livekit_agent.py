@@ -35,7 +35,7 @@ def load_config():
         with open(CONFIG_PATH, "r") as f:
             return json.load(f)
     except Exception:
-        return {"voice": "Charon", "assistant_name": "Ank", "owner": "Abhiyank", "mcp_servers": []}
+        return {"voice": "Charon", "assistant_name": "Jessica", "owner": "Abhiyank", "mcp_servers": []}
 
 
 def load_personalities():
@@ -44,13 +44,13 @@ def load_personalities():
         with open(PERSONALITIES_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return {"active": "ank", "profiles": {}}
+        return {"active": "jessica", "profiles": {}}
 
 
 def get_active_personality():
     """Get the currently active personality profile."""
     data = load_personalities()
-    active_id = data.get("active", "ank")
+    active_id = data.get("active", "jessica")
     profiles = data.get("profiles", {})
     return active_id, profiles.get(active_id, {})
 
@@ -61,7 +61,7 @@ def load_system_prompt():
         with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
             return f.read()
     except Exception:
-        return "You are Ank, an AI voice assistant created by Abhiyank. Address the user as Sir."
+        return "You are Jessica, an AI voice assistant created by Abhiyank. Address the user as Sir."
 
 
 def load_memory():
@@ -78,8 +78,8 @@ def load_conversation_history():
     try:
         with open(CONVERSATION_LOG_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
-            # Return last 20 messages for context
-            return data.get("messages", [])[-20:]
+            # Only last 3 messages — bigger history = slower response
+            return data.get("messages", [])[-3:]
     except Exception:
         return []
 
@@ -109,80 +109,28 @@ def save_conversation_message(role, text):
 
 
 def build_full_prompt():
-    """Build the complete system prompt with personality + memory + conversation history."""
+    """Build the complete system prompt — kept MINIMAL for low latency."""
     _, personality = get_active_personality()
     base_prompt = load_system_prompt()
     memory = load_memory()
-    history = load_conversation_history()
 
-    # Start with personality prompt (overrides base identity)
-    if personality.get("prompt"):
-        prompt = personality["prompt"]
-    else:
-        prompt = base_prompt
+    # Use personality prompt if available, otherwise use base prompt
+    prompt = personality.get("prompt", base_prompt) or base_prompt
 
-    # Add base capabilities from system.md (tools, web search, MCP section)
-    # Extract everything after the identity section
-    sections_to_keep = []
-    in_section = False
-    current_section = []
-    for line in base_prompt.split("\n"):
-        if line.strip().startswith("---") and in_section:
-            sections_to_keep.append("\n".join(current_section))
-            current_section = [line]
-        elif line.strip().startswith("---"):
-            in_section = True
-            current_section = [line]
-        elif in_section:
-            current_section.append(line)
-    if current_section:
-        sections_to_keep.append("\n".join(current_section))
-
-    if sections_to_keep:
-        prompt += "\n\n" + "\n\n".join(sections_to_keep)
-
-    # Add memory section
+    # Only add critical memory (facts + important) — skip notes/history to reduce tokens
     if memory:
-        prompt += "\n\n----------------------------------"
-        prompt += "\nMEMORY - Things you remember"
-        prompt += "\n----------------------------------\n"
-
         facts = memory.get("facts", {})
-        if facts:
-            prompt += "\nKnown Facts:\n"
-            for key, value in facts.items():
-                prompt += f"- {key}: {value}\n"
-
-        notes = memory.get("notes", [])
-        if notes:
-            prompt += "\nNotes:\n"
-            for note in notes[-10:]:
-                prompt += f"- {note}\n"
-
-        reminders = memory.get("reminders", [])
-        if reminders:
-            prompt += "\nActive Reminders:\n"
-            for r in reminders:
-                prompt += f"- {r}\n"
-
         important = memory.get("important", [])
-        if important:
-            prompt += "\nImportant:\n"
-            for item in important:
-                prompt += f"- {item}\n"
+        if facts or important:
+            prompt += "\n\nKNOWN FACTS: "
+            if facts:
+                prompt += "; ".join(f"{k}={v}" for k, v in facts.items())
+            if important:
+                prompt += " | IMPORTANT: " + "; ".join(important[:3])
 
-    # Add recent conversation history
-    if history:
-        prompt += "\n\n----------------------------------"
-        prompt += "\nRECENT CONVERSATION HISTORY"
-        prompt += "\n----------------------------------\n"
-        prompt += "Here is what was discussed recently. Use this to maintain context:\n\n"
-        for msg in history:
-            role = msg.get("role", "unknown")
-            text = msg.get("text", "")
-            prompt += f"[{role}]: {text}\n"
-
-        prompt += "\nIf there were any incomplete tasks mentioned above, proactively follow up on them."
+    # NOTE: Conversation history is NOT injected into the prompt.
+    # The Gemini realtime model maintains its own session context.
+    # Adding history here doubles token count and adds 5-8s latency.
 
     return prompt
 
@@ -224,12 +172,15 @@ def build_mcp_servers(config):
 
 def safe_build_agent(system_prompt, config):
     """Build agent with MCP servers, gracefully falling back if MCP fails."""
-    try:
-        mcp_servers = build_mcp_servers(config)
-        if mcp_servers:
-            return Agent(instructions=system_prompt, mcp_servers=mcp_servers)
-    except Exception:
-        logging.warning("MCP not available - running without MCP tools.")
+    # NOTE: MCP servers disabled for gemini-3.1 compatibility.
+    # N8N MCP tools have complex schemas that trigger 1007 "invalid argument" errors.
+    # The Agent(mcp_servers=...) API is also deprecated — migrate to MCPToolset later.
+    # try:
+    #     mcp_servers = build_mcp_servers(config)
+    #     if mcp_servers:
+    #         return Agent(instructions=system_prompt, mcp_servers=mcp_servers)
+    # except Exception:
+    #     logging.warning("MCP not available - running without MCP tools.")
 
     return Agent(instructions=system_prompt)
 
@@ -239,80 +190,56 @@ load_dotenv()
 async def entrypoint(ctx: JobContext):
     config = load_config()
     _, personality = get_active_personality()
-    voice = personality.get("voice", config.get("voice", "Charon"))
+    voice = personality.get("voice", config.get("voice", "Aoede"))
     system_prompt = build_full_prompt()
     greeting = personality.get("greeting", "Systems online, Sir.")
-    name = personality.get("name", "Ank")
+    name = personality.get("name", "Jessica")
 
-    logging.info(f"Agent [{name}] connecting to room: {ctx.job.room.name} (voice: {voice})")
+    logging.info(f"Agent [{name}] connecting to room: {ctx.job.room.name}")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
+    # NOTE: gemini-3.1-flash-live-preview does NOT support 'voice' param via LiveKit plugin.
+    # Passing it causes persistent 1007 "invalid argument" errors.
     model = google.realtime.RealtimeModel(
-        model="gemini-2.5-flash-native-audio-preview-09-2025",
-        voice=voice,
+        model="gemini-3.1-flash-live-preview",
     )
 
-    ank_agent = safe_build_agent(system_prompt, config)
+    jessica_agent = safe_build_agent(system_prompt, config)
 
     session = AgentSession(
         llm=model,
         vad=silero.VAD.load(
-            activation_threshold=0.65,
-            min_speech_duration=0.2,
-            min_silence_duration=0.6,
-            prefix_padding_duration=0.4,
+            activation_threshold=0.45,
+            min_speech_duration=0.1,
+            min_silence_duration=0.25,
+            prefix_padding_duration=0.15,
         ),
         tools=ALL_TOOLS
     )
 
-    last_user_speech_time = time.time()
-
-    async def idle_checker():
-        while True:
-            await asyncio.sleep(5)
-            state_file = Path(__file__).parent / "state.json"
-            is_sleeping = False
-            if state_file.exists():
-                try:
-                    with open(state_file, "r", encoding="utf-8") as f:
-                        is_sleeping = json.load(f).get("is_sleeping", False)
-                except Exception: pass
-            
-            if not is_sleeping and (time.time() - last_user_speech_time > 180):
-                try:
-                    with open(state_file, "w", encoding="utf-8") as f:
-                        json.dump({"is_sleeping": True}, f)
-                    await session.generate_reply(instructions="The user has been idle for over 3 minutes. BRIEFLY tell them you are entering sleep mode to save energy, and do it.")
-                except Exception: pass
-
-    asyncio.create_task(idle_checker())
-
     @session.on("transcription")
     def on_transcription(transcription):
-        nonlocal last_user_speech_time
         if transcription.is_final:
-            last_user_speech_time = time.time()
             save_conversation_message(name, transcription.text)
-            msg_data = json.dumps({
-                "type": "transcription",
-                "text": transcription.text,
-                "participant": name
-            })
-            asyncio.create_task(ctx.room.local_participant.publish_data(msg_data))
 
-    await session.start(agent=ank_agent, room=ctx.room)
-
+    await session.start(agent=jessica_agent, room=ctx.room)
     logging.info(f"{name} is LIVE.")
-    await session.generate_reply(instructions=f"Say: '{greeting}'")
+
+    # Wait for connection to fully stabilize (gemini-3.1 has a transient 1007 on first connect)
+    await asyncio.sleep(8)
+    try:
+        await session.generate_reply(instructions=f"Say: '{greeting}'")
+    except Exception:
+        logging.warning("Greeting failed — connection still stabilizing.")
 
 async def gui_connect(room_name):
     from livekit import api, rtc
     config = load_config()
     _, personality = get_active_personality()
-    voice = personality.get("voice", config.get("voice", "Charon"))
+    voice = personality.get("voice", config.get("voice", "Aoede"))
     system_prompt = build_full_prompt()
     greeting = personality.get("greeting", "Systems online, Sir.")
-    name = personality.get("name", "Ank")
+    name = personality.get("name", "Jessica")
 
     url = os.getenv("LIVEKIT_URL")
     api_key = os.getenv("LIVEKIT_API_KEY")
@@ -328,19 +255,18 @@ async def gui_connect(room_name):
     await room.connect(url, token)
 
     model = google.realtime.RealtimeModel(
-        model="gemini-2.5-flash-native-audio-preview-09-2025",
-        voice=voice,
+        model="gemini-3.1-flash-live-preview",
     )
 
-    ank_agent = safe_build_agent(system_prompt, config)
+    jessica_agent = safe_build_agent(system_prompt, config)
 
     session = AgentSession(
         llm=model,
         vad=silero.VAD.load(
-            activation_threshold=0.65,
-            min_speech_duration=0.2,
-            min_silence_duration=0.6,
-            prefix_padding_duration=0.4,
+            activation_threshold=0.45,
+            min_speech_duration=0.1,
+            min_silence_duration=0.25,
+            prefix_padding_duration=0.15,
         ),
         tools=ALL_TOOLS
     )
@@ -348,6 +274,7 @@ async def gui_connect(room_name):
     last_user_speech_time = time.time()
 
     async def idle_checker_gui():
+        last_known_sleep_state = False
         while True:
             await asyncio.sleep(5)
             state_file = Path(__file__).parent / "state.json"
@@ -358,11 +285,24 @@ async def gui_connect(room_name):
                         is_sleeping = json.load(f).get("is_sleeping", False)
                 except Exception: pass
             
+            # If sleep state was changed externally (e.g. via GUI), tell the agent so it knows
+            if is_sleeping != last_known_sleep_state:
+                if is_sleeping:
+                    try:
+                        await session.generate_reply(instructions="You are now in SLEEP MODE. Mute yourself. IGNORE ALL SPEECH from now on, unless the user says your wake word 'Jessica'. Say NOTHING right now, just enter sleep mode.")
+                    except Exception: pass
+                else:
+                    try:
+                        await session.generate_reply(instructions="You have been WOKEN UP from sleep mode. You can now listen and respond normally. Greet the user briefly.")
+                    except Exception: pass
+                last_known_sleep_state = is_sleeping
+                
             if not is_sleeping and (time.time() - last_user_speech_time > 180):
                 try:
                     with open(state_file, "w", encoding="utf-8") as f:
                         json.dump({"is_sleeping": True}, f)
-                    await session.generate_reply(instructions="The user has been idle for over 3 minutes. BRIEFLY tell them you are entering sleep mode to save energy, and do it.")
+                    last_known_sleep_state = True
+                    await session.generate_reply(instructions="The user has been idle for over 3 minutes. BRIEFLY tell them you are entering sleep mode to save energy, and do it. Then IGNORE all speech until they say your wake word 'Jessica'.")
                 except Exception: pass
 
     asyncio.create_task(idle_checker_gui())
@@ -376,7 +316,7 @@ async def gui_connect(room_name):
             msg = json.dumps({"type": "transcription", "text": transcription.text, "participant": name})
             asyncio.create_task(room.local_participant.publish_data(msg))
 
-    await session.start(agent=ank_agent, room=room)
+    await session.start(agent=jessica_agent, room=room)
     logging.info(f"{name} is LIVE.")
     await session.generate_reply(instructions=f"Say: '{greeting}'")
 
@@ -388,4 +328,4 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO)
         asyncio.run(gui_connect(sys.argv[2]))
     else:
-        cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="ank_agent"))
+        cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="jessica_agent"))

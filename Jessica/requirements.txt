@@ -1,4 +1,4 @@
-# === Ank Voice Assistant — Dependencies ===
+# === Jessica Voice Assistant — Dependencies ===
 python-dotenv
 livekit-agents[silero,google,mcp]~=1.4
 aiohttp
