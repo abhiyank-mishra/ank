@@ -137,21 +137,14 @@ async def sleep_mode() -> str:
 @llm.function_tool(description="Exit and stop the Jessica AI assistant completely. Use when the user says 'exit', 'band karo', 'quit', 'bye Jessica', 'shut yourself down', etc. This does NOT shutdown the computer — it only stops the AI agent process.")
 async def exit_assistant() -> str:
     """Exit the Jessica AI assistant process gracefully."""
-    import signal
     import threading
-    # Mark state so GUI knows we're exiting
-    agent_state.set_sleeping(True)
-    state_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
-    try:
-        with open(state_file, "w", encoding="utf-8") as f:
-            json.dump({"is_sleeping": True, "exit_requested": True}, f)
-    except Exception:
-        pass
-    # Schedule a delayed kill so the agent can say goodbye first
+    # Mark exit in shared state so GUI picks it up and kills everything
+    agent_state.set_exit_requested(True)
+    # Schedule a delayed hard-kill so the agent can say goodbye first
     def _delayed_exit():
         import time as _t
         _t.sleep(4)  # Give 4 seconds for goodbye message to finish
-        os._exit(0)  # Hard exit, no cleanup needed
+        os._exit(0)  # Hard exit
     threading.Thread(target=_delayed_exit, daemon=True).start()
     return "Goodbye Sir! Jessica shutting down. See you next time."
 
@@ -601,12 +594,12 @@ async def deep_search(query: str) -> str:
     try:
         # Step 1: Get search results from DuckDuckGo
         try:
-            from duckduckgo_search import DDGS
-        except ImportError:
             from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
 
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=6))
+        ddgs = DDGS()
+        results = list(ddgs.text(query, max_results=6))
         
         if not results:
             return f"No results found for: {query}"
@@ -1112,6 +1105,80 @@ async def save_preference(key: str, value: str) -> str:
 
 
 # ══════════════════════════════════════════
+# 🧬 LEARNING & INTELLIGENCE
+# ══════════════════════════════════════════
+
+@llm.function_tool(description="Tell the user everything you know about them. Shows auto-learned info, saved facts, preferences, and important items. Use when user asks 'what do you know about me' or 'kya pata hai tujhe mere baare me'.")
+async def what_i_know() -> str:
+    """Show everything known about the user — learned, facts, preferences, important items."""
+    from utils.memory import _load_memory
+    from utils.context import get_learned_summary, get_usage_stats
+    
+    mem = _load_memory()
+    parts = []
+    
+    # Facts
+    facts = mem.get("facts", {})
+    user_facts = {k: v for k, v in facts.items() if k not in ["last_updated", "owner_name", "assistant_name", "assistant_creator", "persona"]}
+    if user_facts:
+        fact_lines = [f"  • {k.replace('_', ' ').title()}: {v}" for k, v in user_facts.items()]
+        parts.append("📋 What I know:\n" + "\n".join(fact_lines))
+    
+    # Preferences
+    prefs = mem.get("preferences", {})
+    if prefs:
+        pref_lines = [f"  • {k}: {v}" for k, v in prefs.items()]
+        parts.append("⚙️ Your preferences:\n" + "\n".join(pref_lines))
+    
+    # Important items
+    important = mem.get("important", [])
+    if important:
+        imp_lines = [f"  ⭐ {i.get('text', i) if isinstance(i, dict) else i}" for i in important[-5:]]
+        parts.append("⭐ Important things:\n" + "\n".join(imp_lines))
+    
+    # Auto-learned
+    learned = mem.get("learned", [])
+    if learned:
+        learn_lines = [f"  🧠 {l.get('what', '')} (learned {l.get('learned_at', '')})" for l in learned[-10:]]
+        parts.append("🧠 Things I learned automatically:\n" + "\n".join(learn_lines))
+    
+    # Notes
+    notes = mem.get("notes", [])
+    if notes:
+        note_lines = [f"  📝 {n.get('text', n)}" for n in notes[-5:]]
+        parts.append("📝 Your notes:\n" + "\n".join(note_lines))
+    
+    # Usage insights
+    usage = get_usage_stats()
+    if "No usage" not in usage:
+        parts.append("📊 " + usage)
+    
+    if not parts:
+        return "I don't know much about you yet, Sir. Keep talking to me and I'll learn! 😊"
+    
+    return "\n\n".join(parts)
+
+@llm.function_tool(description="Get smart suggestions and insights based on the user's usage patterns and time of day.")
+async def get_usage_insights() -> str:
+    """Get usage patterns and smart suggestions."""
+    from utils.context import get_suggestion, get_usage_stats
+    
+    parts = []
+    stats = get_usage_stats()
+    if "No usage" not in stats:
+        parts.append(stats)
+    
+    suggestion = get_suggestion()
+    if suggestion:
+        parts.append(f"💡 Suggestion: {suggestion}")
+    
+    if not parts:
+        return "Not enough usage data yet. Keep using me and I'll start predicting your needs!"
+    
+    return "\n".join(parts)
+
+
+# ══════════════════════════════════════════
 # ✅ TO-DO LIST
 # ══════════════════════════════════════════
 
@@ -1393,6 +1460,8 @@ ALL_TOOLS = [
     save_memory, recall_memory, save_note, get_notes, clear_notes,
     save_reminder, get_reminders, clear_reminders,
     save_important, get_important, get_owner, save_preference,
+    # Learning & Intelligence
+    what_i_know, get_usage_insights,
     # Apps
     open_app, close_app,
     # Media

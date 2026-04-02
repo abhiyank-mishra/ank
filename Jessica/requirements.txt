@@ -9,6 +9,6 @@ google-generativeai
 pywhatkit
 wikipedia
 requests
-duckduckgo-search
+ddgs
 beautifulsoup4
 lxml

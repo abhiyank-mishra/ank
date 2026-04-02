@@ -1,25 +1,52 @@
 {
-  "owner": "Abhiyank",
-  "owner_protected": true,
-  "created_at": "2026-03-29T17:40:41.926571",
   "facts": {
-    "owner_name": "Abhiyank",
-    "assistant_name": "Jessica",
-    "assistant_creator": "Abhiyank",
-    "persona": "Jessica, professional yet friendly, like J.A.R.V.I.S.",
-    "last_updated": "2026-03-29T18:38:53.841837",
-    "College": "GLA College",
-    "Friend - Chirag": "Slightly short in height",
-    "Friend - Vaibhav": "Slightly dark complexion"
+    "user_name": "abhiyank",
+    "age": "20",
+    "friend_name": "rahul",
+    "likes": "coding and gaming",
+    "remembered": "my exam is on 15th april"
   },
-  "notes": [],
-  "reminders": [
+  "learned": [
     {
-      "text": "Preparation for Code-a-thon at 12:20 PM",
-      "timestamp": "2026-04-01 00:15",
-      "done": false
+      "what": "user_name: abhiyank",
+      "category": "personal",
+      "learned_at": "2026-04-02 22:45"
+    },
+    {
+      "what": "age: 20",
+      "category": "personal",
+      "learned_at": "2026-04-02 22:45"
+    },
+    {
+      "what": "friend_name: rahul",
+      "category": "people",
+      "learned_at": "2026-04-02 22:45"
+    },
+    {
+      "what": "likes: coding and gaming",
+      "category": "preference",
+      "learned_at": "2026-04-02 22:45"
+    },
+    {
+      "what": "remembered: my exam is on 15th april",
+      "category": "explicit_remember",
+      "learned_at": "2026-04-02 22:45"
     }
   ],
-  "preferences": {},
-  "important": []
+  "usage_log": [],
+  "command_frequency": {},
+  "time_patterns": {},
+  "topic_frequency": {
+    "coding": 1,
+    "studies": 1
+  },
+  "owner": "Abhiyank",
+  "owner_protected": true,
+  "mood_history": [
+    {
+      "mood": "happy",
+      "timestamp": "2026-04-02 22:45"
+    }
+  ],
+  "current_mood": "happy"
 }

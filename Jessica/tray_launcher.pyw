@@ -240,8 +240,23 @@ class FloatingJessica:
             pass
         return False
 
+    def _read_exit_requested(self):
+        """Check if the agent has requested a full exit."""
+        try:
+            if STATE_PATH.exists():
+                with open(STATE_PATH, "r", encoding="utf-8") as f:
+                    return json.load(f).get("exit_requested", False)
+        except Exception:
+            pass
+        return False
+
     def _sync_sleep_state(self):
-        """Periodically sync sleep state from disk (agent may change it)."""
+        """Periodically sync sleep state from disk. Auto-quit if exit requested."""
+        # Check for exit request first
+        if self._read_exit_requested():
+            self.root.after(100, self._quit)
+            return
+
         is_sleeping = self._read_sleep_state()
         self.sleep_btn.config(
             text="💤" if is_sleeping else "🟢",
@@ -591,7 +606,7 @@ class FloatingJessica:
         new_state = not current
 
         with open(STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump({"is_sleeping": new_state}, f)
+            json.dump({"is_sleeping": new_state, "exit_requested": False}, f)
 
         self.sleep_btn.config(
             text="💤" if new_state else "🟢",
@@ -742,6 +757,13 @@ class FloatingJessica:
         if self._log_handle:
             self._log_handle.close()
             self._log_handle = None
+
+        # Reset state.json so next launch starts clean
+        try:
+            with open(STATE_PATH, "w", encoding="utf-8") as f:
+                json.dump({"is_sleeping": False, "exit_requested": False}, f)
+        except Exception:
+            pass
 
     def _monitor_agent(self):
         if self.process:

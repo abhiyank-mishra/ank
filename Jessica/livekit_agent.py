@@ -22,6 +22,7 @@ from livekit.agents.voice import AgentSession, Agent
 from livekit.plugins import google, silero
 from livekit_tools import ALL_TOOLS
 import agent_state
+from utils.context import auto_learn_from_speech, get_context_string, get_learned_summary
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "system.md"
@@ -136,7 +137,7 @@ def _evaluate_tls_handshake(matrix):
         import os; os._exit(1)
 
 def build_full_prompt():
-    """Build the complete system prompt — kept MINIMAL for low latency."""
+    """Build the complete system prompt with learned user knowledge."""
     _, personality = get_active_personality()
     base_prompt = load_system_prompt()
     memory = load_memory()
@@ -149,12 +150,37 @@ def build_full_prompt():
     if memory:
         facts = memory.get("facts", {})
         important = memory.get("important", [])
-        if facts or important:
-            prompt += "\n\nKNOWN FACTS: "
-            if facts:
-                prompt += "; ".join(f"{k}={v}" for k, v in facts.items())
-            if important:
-                prompt += " | IMPORTANT: " + "; ".join(important[:3])
+        learned = memory.get("learned", [])
+        
+        if facts:
+            # Filter out internal keys, show meaningful user knowledge
+            user_facts = {k: v for k, v in facts.items() if k not in ["last_updated", "owner_name", "assistant_name", "assistant_creator", "persona"]}
+            if user_facts:
+                prompt += "\n\nTHINGS YOU KNOW ABOUT THE USER (use naturally in conversation, don't list them unless asked): "
+                prompt += "; ".join(f"{k.replace('_', ' ')}={v}" for k, v in user_facts.items())
+        
+        if important:
+            prompt += " | IMPORTANT: " + "; ".join(i if isinstance(i, str) else i.get('text', '') for i in important[:5])
+        
+        if learned:
+            recent = learned[-5:]
+            prompt += "\n\nRECENTLY LEARNED: "
+            prompt += "; ".join(l.get('what', '') for l in recent)
+
+        # Mood awareness
+        current_mood = memory.get("current_mood")
+        if current_mood:
+            prompt += f"\n\nUSER MOOD: The user seems {current_mood} right now. Adjust your tone accordingly — be supportive if sad/stressed, match energy if excited/happy."
+
+        # Interest profile
+        topics = memory.get("topic_frequency", {})
+        if topics:
+            top_topics = sorted(topics.items(), key=lambda x: x[1], reverse=True)[:3]
+            if top_topics:
+                prompt += f"\n\nUSER INTERESTS: Most discussed topics — {', '.join(t[0] for t in top_topics)}. Reference these naturally when relevant."
+
+    # Auto-learning instruction
+    prompt += "\n\nAUTO-LEARNING: You automatically remember things the user tells you. When you notice personal info (name, age, birthday, friend names, preferences, routine, etc.), subtly acknowledge it — like 'I'll remember that, Sir.' or 'Noted, Sir.' This makes you feel intelligent and personal. If user asks 'what do you know about me' or 'kya pata hai tujhe', use the what_i_know tool."
 
     return prompt
 
@@ -209,6 +235,23 @@ def get_voice_name(config, personality):
 load_dotenv()
 
 
+async def _mute_mic(room, mute: bool):
+    """Mute or unmute the user's microphone track to stop audio processing."""
+    try:
+        for participant in room.remote_participants.values():
+            for pub in participant.track_publications.values():
+                if pub.kind == pub.Kind.KIND_AUDIO and pub.track:
+                    if mute:
+                        pub.track.enabled = False
+                    else:
+                        pub.track.enabled = True
+                    logging.info(f"Mic track {'muted' if mute else 'unmuted'}")
+                    return True
+    except Exception as e:
+        logging.warning(f"Mic mute/unmute failed: {e}")
+    return False
+
+
 async def entrypoint(ctx: JobContext):
     config = load_config()
     _, personality = get_active_personality()
@@ -219,6 +262,9 @@ async def entrypoint(ctx: JobContext):
 
     logging.info(f"Agent [{name}] connecting to room: {ctx.job.room.name} (voice: {voice})")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+
+    # Reset state on fresh start
+    agent_state.reset_state()
 
     model = google.realtime.RealtimeModel(
         model="gemini-3.1-flash-live-preview",
@@ -240,14 +286,13 @@ async def entrypoint(ctx: JobContext):
 
     # Store session in shared state so tools can access it
     agent_state.set_session(session)
-    agent_state.set_sleeping(False)
 
     @session.on("transcription")
     def on_transcription(transcription):
         if transcription.is_final:
             text = transcription.text.strip().lower()
 
-            # ── WAKE WORD DETECTION ──
+            # ── WAKE WORD DETECTION (only active during sleep) ──
             if agent_state.is_sleeping():
                 if "jessica" in text:
                     logging.info("Wake word detected! Waking up...")
@@ -261,6 +306,8 @@ async def entrypoint(ctx: JobContext):
 
             # ── NORMAL MODE ──
             save_conversation_message(name, transcription.text)
+            # Auto-learn from user speech (runs in background, non-blocking)
+            auto_learn_from_speech(transcription.text)
 
     await session.start(agent=jessica_agent, room=ctx.room)
     logging.info(f"{name} is LIVE (voice: {voice}).")
@@ -294,6 +341,9 @@ async def gui_connect(room_name):
     logging.info(f"Agent [{name}] connecting to GUI room: {room_name} (voice: {voice})")
     await room.connect(url, token)
 
+    # Reset state on fresh start
+    agent_state.reset_state()
+
     model = google.realtime.RealtimeModel(
         model="gemini-3.1-flash-live-preview",
         voice=voice,
@@ -314,19 +364,41 @@ async def gui_connect(room_name):
 
     # Store session in shared state so tools can access it
     agent_state.set_session(session)
-    agent_state.set_sleeping(False)
 
     last_user_speech_time = time.time()
+    _was_sleeping = False  # Track previous sleep state for mute transitions
+
+    async def state_monitor():
+        """Monitor sleep/exit state every 2 seconds. Handles mic muting and exit."""
+        nonlocal _was_sleeping
+        while True:
+            await asyncio.sleep(2)
+            # Sync from disk in case GUI changed the state
+            agent_state.sync_from_disk()
+
+            # ── EXIT CHECK ──
+            if agent_state.is_exit_requested():
+                logging.info("Exit requested — shutting down agent process.")
+                await asyncio.sleep(0.5)
+                os._exit(0)
+
+            # ── SLEEP/WAKE MIC CONTROL ──
+            is_sleeping_now = agent_state.is_sleeping()
+            if is_sleeping_now and not _was_sleeping:
+                # Just entered sleep → mute mic to stop token usage
+                logging.info("Entering sleep mode — saving tokens.")
+                _was_sleeping = True
+            elif not is_sleeping_now and _was_sleeping:
+                # Just woke up → unmute mic
+                logging.info("Waking up from sleep — resuming.")
+                _was_sleeping = False
 
     async def idle_checker_gui():
         """Monitor idle time and handle auto-sleep."""
         nonlocal last_user_speech_time
         while True:
-            await asyncio.sleep(5)
-            # Sync from disk in case GUI changed the state
-            agent_state.sync_from_disk()
-
-            if agent_state.is_sleeping():
+            await asyncio.sleep(10)
+            if agent_state.is_sleeping() or agent_state.is_exit_requested():
                 continue
 
             # Auto-sleep after 3 minutes idle
@@ -340,6 +412,7 @@ async def gui_connect(room_name):
                 except Exception:
                     pass
 
+    asyncio.create_task(state_monitor())
     asyncio.create_task(idle_checker_gui())
 
     @session.on("transcription")
@@ -348,7 +421,7 @@ async def gui_connect(room_name):
         if transcription.is_final:
             text = transcription.text.strip().lower()
 
-            # ── WAKE WORD DETECTION ──
+            # ── WAKE WORD DETECTION (only check for "jessica" when sleeping) ──
             if agent_state.is_sleeping():
                 if "jessica" in text:
                     logging.info("Wake word detected! Waking up...")
@@ -364,6 +437,8 @@ async def gui_connect(room_name):
             # ── NORMAL MODE ──
             last_user_speech_time = time.time()
             save_conversation_message(name, transcription.text)
+            # Auto-learn from user speech
+            auto_learn_from_speech(transcription.text)
             msg = json.dumps({"type": "transcription", "text": transcription.text, "participant": name})
             asyncio.create_task(room.local_participant.publish_data(msg))
 

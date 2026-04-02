@@ -36,6 +36,7 @@ def ensure_memory_json(jessica_dir):
             "reminders": [],
             "preferences": {},
             "important": [],
+            "learned": [],
         }
         with open(memory_file, "w", encoding="utf-8") as f:
             json.dump(default_memory, f, indent=2, ensure_ascii=False)
@@ -183,6 +184,34 @@ def setup_env_interactive(jessica_dir, py_exec):
     print("✅ [SAVED] .env file created with your keys!")
 
 
+def _get_installed_packages(py_exec):
+    """Get a set of installed package names in the venv (fast, single call)."""
+    try:
+        res = subprocess.run(
+            [str(py_exec), "-m", "pip", "list", "--format=json"],
+            capture_output=True, text=True, timeout=30
+        )
+        if res.returncode == 0:
+            pkgs = json.loads(res.stdout)
+            # Normalize names: pip uses hyphens but imports use underscores
+            return {p["name"].lower().replace("-", "_") for p in pkgs}
+    except Exception:
+        pass
+    return set()
+
+
+def _normalize_pkg_name(name):
+    """Normalize a pip package name for comparison."""
+    # Strip version specifiers like >=, ==, ~=, etc.
+    for op in [">=", "<=", "==", "~=", "!=", ">", "<"]:
+        if op in name:
+            name = name.split(op)[0]
+    # Strip extras like [all]
+    if "[" in name:
+        name = name.split("[")[0]
+    return name.strip().lower().replace("-", "_")
+
+
 def run_doctor():
     """Runs auto-setup process: checks venv, deps, .env, bat scripts."""
     print("👨‍⚕️ Jessica Doctor: Checking system health and configuration...\n")
@@ -217,55 +246,73 @@ def run_doctor():
         print("❌ [ERROR] Python executable not found in venv. Try deleting venv/ and rerunning doctor.")
         return
 
-    # ── 2. Upgrade pip first ──
-    print("⏳ Upgrading pip...")
-    try:
-        subprocess.run(
-            [str(py_exec), "-m", "pip", "install", "--upgrade", "pip"],
-            capture_output=True, text=True, timeout=120
-        )
-        print("✅ [OK] pip is up to date.")
-    except Exception as e:
-        print(f"⚠️  pip upgrade skipped: {e}")
+    # ── 2. Get currently installed packages (single fast call) ──
+    print("⏳ Scanning installed packages...")
+    installed = _get_installed_packages(py_exec)
+    if installed:
+        print(f"  📦 Found {len(installed)} packages already installed.")
+    else:
+        print("  📦 Fresh venv — will install everything.")
 
-    # ── 3. Install dependencies from requirements.txt ──
+    # ── 3. Smart dependency installation from requirements.txt ──
     if not requirements_file.exists():
         print(f"❌ [ERROR] requirements.txt not found at: {requirements_file}")
         print("   Expected location: Jessica/requirements.txt")
         return
 
-    print(f"⏳ Installing dependencies from {requirements_file.name}... (this may take a minute)")
-    try:
-        res = subprocess.run(
-            [str(py_exec), "-m", "pip", "install", "-r", str(requirements_file)],
-            capture_output=True, text=True, timeout=600
-        )
-        if res.returncode != 0:
-            print(f"❌ [ERROR] pip install failed:\n{res.stderr[-500:]}")
-            return
-        if "Successfully installed" in res.stdout:
-            print("🔧 [FIXED] Missing dependencies installed.")
-        else:
-            print("✅ [OK] All dependencies are already installed.")
-    except subprocess.TimeoutExpired:
-        print("❌ [ERROR] pip install timed out after 10 minutes.")
-        return
-    except Exception as e:
-        print(f"❌ [ERROR] Failed to install dependencies: {e}")
-        return
+    # Read requirements and figure out what's missing
+    with open(requirements_file, "r", encoding="utf-8") as f:
+        req_lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
-    # ── 4. Install extra packages used in tools but not in requirements.txt ──
-    extras = ["pyperclip", "opencv-python", "pynput"]
-    for pkg in extras:
+    missing = []
+    already = []
+    for req in req_lines:
+        pkg_name = _normalize_pkg_name(req)
+        if pkg_name in installed:
+            already.append(pkg_name)
+        else:
+            missing.append(req)
+
+    if already:
+        print(f"  ✅ {len(already)} packages already installed — skipping: {', '.join(already[:8])}{'...' if len(already) > 8 else ''}")
+
+    if missing:
+        print(f"  🔧 {len(missing)} packages missing — installing: {', '.join(_normalize_pkg_name(m) for m in missing[:8])}{'...' if len(missing) > 8 else ''}")
         try:
             res = subprocess.run(
-                [str(py_exec), "-m", "pip", "install", pkg],
-                capture_output=True, text=True, timeout=120
+                [str(py_exec), "-m", "pip", "install"] + missing,
+                capture_output=True, text=True, timeout=600
             )
-            if "Successfully installed" in res.stdout:
-                print(f"🔧 [FIXED] Installed extra package: {pkg}")
-        except Exception:
-            pass
+            if res.returncode != 0:
+                print(f"❌ [ERROR] pip install failed:\n{res.stderr[-500:]}")
+                return
+            print("  ✅ Missing packages installed successfully!")
+        except subprocess.TimeoutExpired:
+            print("❌ [ERROR] pip install timed out after 10 minutes.")
+            return
+        except Exception as e:
+            print(f"❌ [ERROR] Failed to install dependencies: {e}")
+            return
+    else:
+        print("  ✅ All requirements.txt dependencies satisfied!")
+
+    # ── 4. Smart extras check (only install if missing) ──
+    extras = ["pyperclip", "opencv-python", "pynput"]
+    extras_missing = [pkg for pkg in extras if _normalize_pkg_name(pkg) not in installed]
+    if extras_missing:
+        print(f"  🔧 Installing extras: {', '.join(extras_missing)}")
+        for pkg in extras_missing:
+            try:
+                res = subprocess.run(
+                    [str(py_exec), "-m", "pip", "install", pkg],
+                    capture_output=True, text=True, timeout=120
+                )
+                if "Successfully installed" in res.stdout:
+                    print(f"    ✅ {pkg}")
+            except Exception:
+                pass
+    else:
+        print("  ✅ All extra packages already installed.")
 
     # ── 5. .env File Check (Interactive) ──
     setup_env_interactive(jessica_dir, py_exec)
@@ -353,13 +400,19 @@ def run_doctor():
                 except Exception:
                     pass
 
-    # ── 9. Automations directory ──
-    automations_dir = base_dir / "automations"
-    if not automations_dir.exists():
-        automations_dir.mkdir(exist_ok=True)
-        print("📁 [CREATED] automations/ directory for automation recordings.")
-    else:
-        print("✅ [OK] automations/ directory exists.")
+
+    # ── 10. Clean up unused files ──
+    unused_files = [
+        jessica_dir / "server.py",
+        jessica_dir / "test_pipeline_agent.py",
+    ]
+    for uf in unused_files:
+        if uf.exists():
+            try:
+                uf.unlink()
+                print(f"🧹 [CLEANUP] Removed unused file: {uf.name}")
+            except Exception:
+                pass
 
     # ── Done ──
     print("\n" + "=" * 55)
