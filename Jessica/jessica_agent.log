@@ -1,0 +1,77 @@
+    Agents   Starting console mode 🚀
+              
+    22:22:34.333 DEBUG… asyncio            Using proactor: IocpProactor  
+    22:22:34.339 INFO … livekit.agents     starting worker  
+                                         {"version": "1.5.1", "rtc-version": 
+"1.1.3"}
+    22:22:34.343 INFO … livekit.agents     HTTP server listening on :54429  
+    22:22:34.346 WARNI… livekit.agents     no warmed process available for     
+                                           job, waiting for one to be created  
+                                         {"job_id": "mock-job-518f9f7934be"}
+    22:22:34.349 INFO … livekit.agents     initializing job runner  
+                                         {"tid": 8252}
+    22:22:34.351 DEBUG… asyncio            Using proactor: IocpProactor  
+    22:22:34.352 INFO … livekit.agents     job runner initialized  
+                                         {"tid": 8252, "elapsed_time": 0.0}
+    22:22:34.384 INFO … root               Agent [Jessica] connecting to       
+                                           room: console-room (voice: Leda)    
+    22:22:35.206 DEBUG… livekit.…ns.google connecting to Gemini Realtime       
+                                           API...                              
+    22:22:35.213 DEBUG… livekit.agents     using audio io: `Console` ->        
+                                           `AgentSession` ->                   
+                                           `TranscriptSynchronizer` ->         
+                                           `Console`                           
+    22:22:35.215 DEBUG… livekit.agents     using transcript io:                
+                                           `AgentSession` ->                   
+                                           `TranscriptSynchronizer`            
+    22:22:35.216 INFO … root               Jessica is LIVE (voice: Leda).  
+    22:22:46.775 ERROR… livekit.…ns.google error in receive task: 1007 None.   
+                                           Request contains an invalid         
+                                           argument.                           
+Traceback (most recent call last):
+  File 
+"G:\Python\AI\Jessica\Jessica\venv\Lib\site-packages\google\genai\live.py", 
+line 537, in _receive
+    raw_response = await self._ws.recv(decode=False)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File 
+"G:\Python\AI\Jessica\Jessica\venv\Lib\site-packages\websockets\asyncio\connect
+ion.py", line 324, in recv
+    raise self.protocol.close_exc from self.recv_exc
+websockets.exceptions.ConnectionClosedError: received 1007 (invalid frame 
+payload data) Request contains an invalid argument.; then sent 1007 (invalid 
+frame payload data) Request contains an invalid argument.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File 
+"G:\Python\AI\Jessica\Jessica\venv\Lib\site-packages\livekit\plugins\google\rea
+ltime\realtime_api.py", line 953, in _recv_task
+    async for response in session.receive():
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<57 lines>...
+            self._num_retries = 0  # reset the retry counter
+            ^^^^^^^^^^^^^^^^^^^^^
+  File 
+"G:\Python\AI\Jessica\Jessica\venv\Lib\site-packages\google\genai\live.py", 
+line 456, in receive
+    while result := await self._receive():
+                    ^^^^^^^^^^^^^^^^^^^^^
+  File 
+"G:\Python\AI\Jessica\Jessica\venv\Lib\site-packages\google\genai\live.py", 
+line 547, in _receive
+    errors.APIError.raise_error(code, reason, None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File 
+"G:\Python\AI\Jessica\Jessica\venv\Lib\site-packages\google\genai\errors.py", 
+line 188, in raise_error
+    raise cls(status_code, response_json, response)
+google.genai.errors.APIError: 1007 None. Request contains an invalid argument.
+
+    22:22:46.786 DEBUG… livekit.…ns.google send task finished.  
+    22:22:46.831 DEBUG… livekit.…ns.google connecting to Gemini Realtime       
+                                           API...                              
+    22:22:48.233 ERROR… livekit.agents     failed to generate a reply:         
+                                           generate_reply timed out waiting    
+                                           for generation_created event.       
