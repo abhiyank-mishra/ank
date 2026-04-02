@@ -10,3 +10,5 @@ pywhatkit
 wikipedia
 requests
 duckduckgo-search
+beautifulsoup4
+lxml

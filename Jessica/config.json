@@ -1,6 +1,6 @@
 {
     "assistant_name": "Jessica",
-    "voice": "Aoede",
+    "voice": "Leda",
     "mcp_servers": [
         {
             "name": "N8N Jessica Server",
@@ -8,5 +8,5 @@
             "type": "streamable_http"
         }
     ],
-    "owner": "Abhiyank"
+    "owner": "Admin"
 }

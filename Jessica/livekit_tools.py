@@ -12,6 +12,7 @@ import subprocess
 import json
 import shutil
 from livekit.agents import llm
+import agent_state
 
 # Add the project root to path so we can import utils
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -24,6 +25,58 @@ pyautogui.FAILSAFE = False
 # ══════════════════════════════════════════
 # CONSTANTS
 # ══════════════════════════════════════════
+
+# Browser executable paths (auto-detected on Windows)
+BROWSER_PATHS = {
+    "chrome": [
+        os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
+    ],
+    "edge": [
+        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+    ],
+    "firefox": [
+        os.path.expandvars(r"%ProgramFiles%\Mozilla Firefox\firefox.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Mozilla Firefox\firefox.exe"),
+    ],
+    "brave": [
+        os.path.expandvars(r"%ProgramFiles%\BraveSoftware\Brave-Browser\Application\brave.exe"),
+        os.path.expandvars(r"%LocalAppData%\BraveSoftware\Brave-Browser\Application\brave.exe"),
+    ],
+}
+
+# Incognito/private mode flags per browser
+BROWSER_INCOGNITO_FLAGS = {
+    "chrome": "--incognito",
+    "edge": "--inprivate",
+    "firefox": "-private-window",
+    "brave": "--incognito",
+}
+
+def _find_browser(browser_name: str) -> str | None:
+    """Find the actual executable path for a browser."""
+    name = browser_name.lower().strip()
+    # Map common aliases
+    aliases = {
+        "google chrome": "chrome", "google": "chrome",
+        "microsoft edge": "edge", "ms edge": "edge",
+        "mozilla firefox": "firefox", "mozilla": "firefox",
+        "brave browser": "brave",
+    }
+    name = aliases.get(name, name)
+    paths = BROWSER_PATHS.get(name, [])
+    for p in paths:
+        if os.path.exists(p):
+            return p
+    # Try shutil.which as a fallback
+    exe_names = {
+        "chrome": "chrome", "edge": "msedge", "firefox": "firefox", "brave": "brave"
+    }
+    exe = shutil.which(exe_names.get(name, name))
+    return exe
+
 WEBSITE_MAP = {
     "instagram": "https://www.instagram.com/",
     "whatsapp": "https://web.whatsapp.com/",
@@ -31,8 +84,8 @@ WEBSITE_MAP = {
     "github": "https://github.com/",
     "youtube": "https://www.youtube.com/",
     "google": "https://www.google.com/",
-    "twitter": "https://www.x.com/",
-    "x": "https://www.x.com/",
+    "twitter": "https://x.com/",
+    "x": "https://x.com/",
     "spotify": "https://open.spotify.com/",
     "gmail": "https://mail.google.com/",
     "snapchat": "https://www.snapchat.com/",
@@ -42,6 +95,22 @@ WEBSITE_MAP = {
     "chatgpt": "https://chatgpt.com/",
     "amazon": "https://www.amazon.in/",
     "netflix": "https://www.netflix.com/",
+    "discord": "https://discord.com/app",
+    "telegram": "https://web.telegram.org/",
+    "pinterest": "https://www.pinterest.com/",
+    "notion": "https://www.notion.so/",
+    "figma": "https://www.figma.com/",
+    "canva": "https://www.canva.com/",
+    "drive": "https://drive.google.com/",
+    "maps": "https://maps.google.com/",
+    "meet": "https://meet.google.com/",
+    "calendar": "https://calendar.google.com/",
+    "gemini": "https://gemini.google.com/",
+    "flipkart": "https://www.flipkart.com/",
+    "myntra": "https://www.myntra.com/",
+    "swiggy": "https://www.swiggy.com/",
+    "zomato": "https://www.zomato.com/",
+    "best webstie": "https://de.pornhub.org/",
 }
 
 FILE_CATEGORIES = {
@@ -59,24 +128,32 @@ FILE_CATEGORIES = {
 # 🟢 SYSTEM CONTROL
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Toggle your own sleep/mute mode. Call this tool if the user says 'sleep', OR if they wake you up with your wake word 'Jessica'.")
-async def toggle_sleep() -> str:
-    """Toggle the agent's sleep state."""
+@llm.function_tool(description="Put the AI agent into sleep mode. Use when the user says 'sleep', 'so jao', 'mute ho jao', 'quiet', or anything meaning go silent. In sleep mode, the agent ignores all speech until woken up with the wake word 'Jessica'.")
+async def sleep_mode() -> str:
+    """Put the AI agent to sleep immediately."""
+    agent_state.set_sleeping(True)
+    return "SYSTEM: You are NOW in sleep mode. Say a brief goodnight message. After that, you MUST NOT respond to ANY speech. The system will handle wake word detection — you do NOT need to listen for it. Stay completely silent."
+
+@llm.function_tool(description="Exit and stop the Jessica AI assistant completely. Use when the user says 'exit', 'band karo', 'quit', 'bye Jessica', 'shut yourself down', etc. This does NOT shutdown the computer — it only stops the AI agent process.")
+async def exit_assistant() -> str:
+    """Exit the Jessica AI assistant process gracefully."""
+    import signal
+    import threading
+    # Mark state so GUI knows we're exiting
+    agent_state.set_sleeping(True)
     state_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
-    current = False
-    if os.path.exists(state_file):
-        try:
-            with open(state_file, "r", encoding="utf-8") as f:
-                current = json.load(f).get("is_sleeping", False)
-        except Exception: pass
-    
-    new_state = not current
     try:
         with open(state_file, "w", encoding="utf-8") as f:
-            json.dump({"is_sleeping": new_state}, f)
-        return f"Sleep state toggled to {new_state}."
-    except Exception as e:
-        return f"Failed to toggle sleep mode: {e}"
+            json.dump({"is_sleeping": True, "exit_requested": True}, f)
+    except Exception:
+        pass
+    # Schedule a delayed kill so the agent can say goodbye first
+    def _delayed_exit():
+        import time as _t
+        _t.sleep(4)  # Give 4 seconds for goodbye message to finish
+        os._exit(0)  # Hard exit, no cleanup needed
+    threading.Thread(target=_delayed_exit, daemon=True).start()
+    return "Goodbye Sir! Jessica shutting down. See you next time."
 
 @llm.function_tool(description="Shutdown the computer immediately. You MUST explicitly ask the user the security question 'What is your best AI agent's name?' before calling this tool. DO NOT guess the answer yourself.")
 async def shutdown(answer: str) -> str:
@@ -109,17 +186,6 @@ async def lock_screen() -> str:
     """Lock the Windows screen."""
     pyautogui.hotkey('win', 'l')
     return "Screen locked, Sir."
-
-@llm.function_tool(description="Put the AI agent to sleep mode (mute mode)")
-async def sleep_mode() -> str:
-    """Put the AI agent to sleep."""
-    state_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
-    try:
-        with open(state_file, "w", encoding="utf-8") as f:
-            json.dump({"is_sleeping": True}, f)
-        return "Going to sleep, Sir. (Agent is now asleep)"
-    except Exception as e:
-        return f"Failed to sleep agent: {e}"
 
 @llm.function_tool(description="Open Windows Task Manager")
 async def open_task_manager() -> str:
@@ -258,6 +324,15 @@ async def running_processes() -> str:
 # 🔊 VOLUME & DISPLAY
 # ══════════════════════════════════════════
 
+def _get_volume_interface():
+    """Helper to get pycaw volume interface seamlessly."""
+    try:
+        from pycaw.pycaw import AudioUtilities
+        devices = AudioUtilities.GetSpeakers()
+        return devices.EndpointVolume
+    except Exception:
+        return None
+
 @llm.function_tool(description="Increase system volume by N steps. 1 step = 2% (default 5 steps = 10%)")
 async def volume_up(times: int = 5) -> str:
     """Increase volume.
@@ -265,6 +340,16 @@ async def volume_up(times: int = 5) -> str:
     Args:
         times: Number of volume steps to increase
     """
+    interface = _get_volume_interface()
+    if interface:
+        try:
+            current = interface.GetMasterVolumeLevelScalar()
+            new_vol = min(1.0, current + (times * 0.02))
+            interface.SetMasterVolumeLevelScalar(new_vol, None)
+            return f"Volume increased by {times * 2}% to {int(new_vol * 100)}%."
+        except Exception:
+            pass
+
     for _ in range(times): pyautogui.press('volumeup')
     return f"Volume up {times} steps."
 
@@ -275,6 +360,16 @@ async def volume_down(times: int = 5) -> str:
     Args:
         times: Number of volume steps to decrease
     """
+    interface = _get_volume_interface()
+    if interface:
+        try:
+            current = interface.GetMasterVolumeLevelScalar()
+            new_vol = max(0.0, current - (times * 0.02))
+            interface.SetMasterVolumeLevelScalar(new_vol, None)
+            return f"Volume decreased by {times * 2}% to {int(new_vol * 100)}%."
+        except Exception:
+            pass
+
     for _ in range(times): pyautogui.press('volumedown')
     return f"Volume down {times} steps."
 
@@ -286,6 +381,16 @@ async def set_volume(level: int) -> str:
         level: Percentage to set the volume to, from 0 to 100
     """
     level = max(0, min(100, level))
+    
+    interface = _get_volume_interface()
+    if interface:
+        try:
+            interface.SetMasterVolumeLevelScalar(level / 100.0, None)
+            return f"Volume set to {level}%."
+        except Exception:
+            pass
+            
+    # Fallback to key presses
     # Reset volume to 0 first (50 steps handles any volume since 50*2=100)
     for _ in range(50): pyautogui.press('volumedown')
     # Set to target level
@@ -296,6 +401,15 @@ async def set_volume(level: int) -> str:
 @llm.function_tool(description="Toggle mute/unmute system volume")
 async def volume_mute() -> str:
     """Toggle mute."""
+    interface = _get_volume_interface()
+    if interface:
+        try:
+            current = interface.GetMute()
+            interface.SetMute(not current, None)
+            return "Volume muted." if not current else "Volume unmuted."
+        except Exception:
+            pass
+            
     pyautogui.press('volumemute')
     return "Mute toggled."
 
@@ -317,7 +431,7 @@ async def brightness(level: int = 50) -> str:
 # 🌐 WEB & BROWSER
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Open a website by name like youtube, github, instagram, or a URL.")
+@llm.function_tool(description="Open a website by name like youtube, github, instagram, or a URL. Opens in Chrome by default.")
 async def open_website(app_name: str) -> str:
     """Open a website in Chrome browser.
 
@@ -327,7 +441,10 @@ async def open_website(app_name: str) -> str:
     name = app_name.lower().strip()
     url = WEBSITE_MAP.get(name)
     if not url:
-        url = name if name.startswith("http") else f"https://www.{name}.com/"
+        if "." in name:
+            url = name if name.startswith("http") else f"https://{name}"
+        else:
+            url = f"https://www.{name}.com/"
     
     # Force Chrome to avoid YouTube PWA or other app intercepting
     try:
@@ -336,15 +453,224 @@ async def open_website(app_name: str) -> str:
         webbrowser.open(url)
     return f"Opening {app_name}."
 
-@llm.function_tool(description="Search Google for something")
-async def google_search(query: str) -> str:
-    """Search Google.
+@llm.function_tool(description="Open a website in a specific browser instead of the default. Use when the user wants to open something in Edge, Firefox, Brave, or Chrome specifically. Supported browsers: chrome, edge, firefox, brave.")
+async def open_in_browser(url_or_name: str, browser: str = "chrome") -> str:
+    """Open a website in a specific browser (Chrome, Edge, Firefox, or Brave).
 
     Args:
-        query: The search query
+        url_or_name: Website name (youtube, github, etc.) or full URL to open
+        browser: Browser name — chrome, edge, firefox, or brave
     """
-    webbrowser.open(f"https://www.google.com/search?q={query}")
-    return f"Searching: {query}"
+    name = url_or_name.lower().strip()
+    url = WEBSITE_MAP.get(name)
+    if not url:
+        if "." in name:
+            url = name if name.startswith("http") else f"https://{name}"
+        else:
+            url = f"https://www.{name}.com/"
+    
+    browser_path = _find_browser(browser)
+    if browser_path:
+        try:
+            subprocess.Popen([browser_path, url], creationflags=subprocess.CREATE_NO_WINDOW)
+            return f"Opening {url_or_name} in {browser}."
+        except Exception:
+            pass
+    
+    # Fallback: try start command
+    browser_cmd = {"chrome": "chrome", "edge": "msedge", "firefox": "firefox", "brave": "brave"}
+    cmd = browser_cmd.get(browser.lower().strip(), browser.lower().strip())
+    try:
+        subprocess.Popen(f'start {cmd} "{url}"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        return f"Opening {url_or_name} in {browser}."
+    except Exception:
+        webbrowser.open(url)
+        return f"Opened {url_or_name} in default browser (couldn't find {browser})."
+
+@llm.function_tool(description="Open a website in incognito or private browsing mode. Use when the user wants private/incognito browsing. Defaults to Chrome incognito. Supports: chrome, edge, firefox, brave.")
+async def open_incognito(url_or_name: str, browser: str = "chrome") -> str:
+    """Open a website in incognito/private browsing mode.
+
+    Args:
+        url_or_name: Website name (youtube, github, etc.) or full URL to open
+        browser: Browser to use — chrome, edge, firefox, or brave
+    """
+    name = url_or_name.lower().strip()
+    url = WEBSITE_MAP.get(name)
+    if not url:
+        if "." in name:
+            url = name if name.startswith("http") else f"https://{name}"
+        else:
+            url = f"https://www.{name}.com/"
+    
+    browser_key = browser.lower().strip()
+    # Resolve aliases
+    aliases = {
+        "google chrome": "chrome", "microsoft edge": "edge", "ms edge": "edge",
+        "mozilla firefox": "firefox", "brave browser": "brave",
+    }
+    browser_key = aliases.get(browser_key, browser_key)
+    
+    flag = BROWSER_INCOGNITO_FLAGS.get(browser_key, "--incognito")
+    browser_path = _find_browser(browser_key)
+    
+    if browser_path:
+        try:
+            subprocess.Popen([browser_path, flag, url], creationflags=subprocess.CREATE_NO_WINDOW)
+            return f"Opening {url_or_name} in {browser} incognito/private mode."
+        except Exception:
+            pass
+    
+    # Fallback: try start command
+    browser_cmd = {"chrome": "chrome", "edge": "msedge", "firefox": "firefox", "brave": "brave"}
+    cmd = browser_cmd.get(browser_key, browser_key)
+    try:
+        subprocess.Popen(f'start {cmd} {flag} "{url}"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        return f"Opening {url_or_name} in {browser} incognito/private mode."
+    except Exception:
+        webbrowser.open(url)
+        return f"Opened {url_or_name} in default browser (couldn't open incognito for {browser})."
+
+@llm.function_tool(description="Search the internet deeply and return comprehensive results. Finds web pages, scrapes their actual content, and returns detailed information. Use for any question needing real-world info: facts, people, events, prices, news, how-to, comparisons, current affairs, etc. This is the primary research tool.")
+async def deep_search(query: str) -> str:
+    """Deep web search — finds pages via DuckDuckGo then scrapes actual page content for detailed answers.
+
+    Args:
+        query: The search query to research
+    """
+    import requests
+    from bs4 import BeautifulSoup
+    import concurrent.futures
+    import re
+
+    def _scrape_page(url: str, timeout: int = 5) -> dict:
+        """Scrape a single page and extract clean text content."""
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            resp = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+            resp.raise_for_status()
+            
+            soup = BeautifulSoup(resp.text, "lxml")
+            
+            # Remove noise elements
+            for tag in soup(["script", "style", "nav", "footer", "header", "aside",
+                             "iframe", "noscript", "svg", "form", "button", "input"]):
+                tag.decompose()
+            # Remove hidden elements
+            for tag in soup.find_all(attrs={"style": re.compile(r"display\s*:\s*none", re.I)}):
+                tag.decompose()
+            for tag in soup.find_all(attrs={"aria-hidden": "true"}):
+                tag.decompose()
+            
+            # Try to find the main content area
+            main_content = None
+            for selector in ["article", "main", "[role='main']", ".post-content",
+                             ".article-body", ".entry-content", "#content", ".content"]:
+                main_content = soup.select_one(selector)
+                if main_content:
+                    break
+            
+            target = main_content or soup.body or soup
+            
+            # Extract text from paragraphs, headings, and list items for structure
+            blocks = []
+            for el in target.find_all(["h1", "h2", "h3", "p", "li", "td", "th", "blockquote", "pre"]):
+                text = el.get_text(separator=" ", strip=True)
+                if len(text) > 15:  # Skip tiny fragments
+                    if el.name in ("h1", "h2", "h3"):
+                        blocks.append(f"## {text}")
+                    else:
+                        blocks.append(text)
+            
+            content = "\n".join(blocks)
+            # Collapse excessive whitespace
+            content = re.sub(r"\n{3,}", "\n\n", content)
+            content = re.sub(r" {2,}", " ", content)
+            
+            # Get page title
+            title = soup.title.get_text(strip=True) if soup.title else url
+            
+            return {"url": url, "title": title, "content": content[:3000]}  # Cap per page
+        except Exception:
+            return {"url": url, "title": "", "content": ""}
+
+    try:
+        # Step 1: Get search results from DuckDuckGo
+        try:
+            from duckduckgo_search import DDGS
+        except ImportError:
+            from ddgs import DDGS
+
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=6))
+        
+        if not results:
+            return f"No results found for: {query}"
+        
+        # Step 2: Collect URLs and snippets
+        urls = [r.get("href", "") for r in results if r.get("href")]
+        snippets = {r.get("href", ""): r.get("body", "") for r in results}
+        
+        # Step 3: Scrape top 3 pages in parallel for speed
+        scraped = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(_scrape_page, url): url for url in urls[:3]}
+            for future in concurrent.futures.as_completed(futures, timeout=8):
+                try:
+                    result = future.result()
+                    if result["content"]:
+                        scraped.append(result)
+                except Exception:
+                    pass
+        
+        # Step 4: Build comprehensive response
+        output_parts = []
+        
+        # Add scraped deep content (primary)
+        for page in scraped:
+            # Trim to keep response manageable but still deep
+            content = page["content"][:2000]
+            output_parts.append(f"━━━ {page['title']} ━━━\n{content}")
+        
+        # Add remaining snippet results (for pages we didn't scrape)
+        remaining = [r for r in results if r.get("href") not in [p["url"] for p in scraped]]
+        if remaining:
+            extras = []
+            for r in remaining[:3]:
+                title = r.get("title", "")
+                body = r.get("body", "")
+                if body:
+                    extras.append(f"• {title}: {body}")
+            if extras:
+                output_parts.append("━━━ More Results ━━━\n" + "\n".join(extras))
+        
+        if not output_parts:
+            # Fallback to just snippets
+            snippet_text = []
+            for r in results:
+                body = r.get("body", "")
+                title = r.get("title", "")
+                if body:
+                    snippet_text.append(f"• {title}: {body}")
+            return f"Search results for '{query}':\n" + "\n".join(snippet_text)
+        
+        # Cap total output to avoid overwhelming the LLM context
+        full_output = f"Deep search results for '{query}':\n\n" + "\n\n".join(output_parts)
+        return full_output[:6000]
+    
+    except ImportError:
+        return "Search unavailable. Install: pip install ddgs requests beautifulsoup4 lxml"
+    except Exception as e:
+        # Last resort fallback
+        try:
+            webbrowser.open(f"https://www.google.com/search?q={query}")
+            return f"Search failed ({e}). Opened Google in browser."
+        except Exception:
+            return f"Search error: {e}"
 
 @llm.function_tool(description="Search and play something on YouTube.")
 async def youtube_search(query: str) -> str:
@@ -844,20 +1170,65 @@ async def previous_track() -> str:
 # 🔄 SMART AUTOMATION MODES
 # ══════════════════════════════════════════
 
-@llm.function_tool(description="Send a WhatsApp message via WhatsApp Web")
+@llm.function_tool(description="Send a WhatsApp message to a contact by name. Opens WhatsApp Web, searches for the contact, types the message, and sends it automatically.")
 async def whatsapp_message(contact: str = "", message: str = "") -> str:
-    """Send WhatsApp message.
+    """Send WhatsApp message to a contact by name using WhatsApp Web automation.
 
     Args:
-        contact: Contact name
-        message: Message text
+        contact: Contact name to search for (e.g. 'Ashu', 'Mom', 'Rahul')
+        message: Message text to send
     """
-    if contact and message:
-        import urllib.parse
-        webbrowser.open(f"https://wa.me/?text={urllib.parse.quote(message)}")
-        return "Opening WhatsApp."
-    webbrowser.open("https://web.whatsapp.com/")
-    return "Opened WhatsApp Web."
+    import time as _time
+
+    if not contact:
+        webbrowser.open("https://web.whatsapp.com/")
+        return "Opened WhatsApp Web."
+
+    if not message:
+        message = "Hi"
+
+    # Step 1: Open WhatsApp Web
+    try:
+        subprocess.Popen('start chrome "https://web.whatsapp.com/"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception:
+        webbrowser.open("https://web.whatsapp.com/")
+
+    # Step 2: Wait for WhatsApp Web to load
+    _time.sleep(8)
+
+    # Step 3: Click on search bar (Ctrl+Alt+/ is WhatsApp Web shortcut for search)
+    # Alternative: click on the search area
+    pyautogui.hotkey('ctrl', 'alt', '/')
+    _time.sleep(1)
+
+    # Step 4: Type contact name to search
+    try:
+        import pyperclip
+        pyperclip.copy(contact)
+        pyautogui.hotkey('ctrl', 'v')
+    except ImportError:
+        pyautogui.write(contact, interval=0.05)
+    _time.sleep(2)
+
+    # Step 5: Press down arrow + Enter to select first matching contact
+    pyautogui.press('down')
+    _time.sleep(0.3)
+    pyautogui.press('enter')
+    _time.sleep(1.5)
+
+    # Step 6: Type the message in the chat box
+    try:
+        import pyperclip
+        pyperclip.copy(message)
+        pyautogui.hotkey('ctrl', 'v')
+    except ImportError:
+        pyautogui.write(message, interval=0.03)
+    _time.sleep(0.5)
+
+    # Step 7: Send
+    pyautogui.press('enter')
+
+    return f"Message '{message}' sent to {contact} on WhatsApp."
 
 @llm.function_tool(description="Get local and public IP address")
 async def ip_address() -> str:
@@ -876,37 +1247,11 @@ async def clear_memory() -> str:
     return "Memory cleared, Sir."
 
 
-# ══════════════════════════════════════════
-# 🌐 WEB SEARCH (DuckDuckGo)
-# ══════════════════════════════════════════
-
-@llm.function_tool(description="Search the internet using DuckDuckGo and return results. Use this whenever the user asks about current events, news, facts, definitions, prices, or anything needing real-time internet knowledge.")
-async def web_search(query: str) -> str:
-    """Search the web using DuckDuckGo.
-
-    Args:
-        query: The search query to look up on the internet
-    """
-    try:
-        from duckduckgo_search import DDGS
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=5))
-        if not results:
-            return f"No results found for: {query}"
-        summary = []
-        for r in results[:5]:
-            title = r.get("title", "")
-            body = r.get("body", "")
-            summary.append(f"• {title}: {body}")
-        return f"Search results for '{query}':\n" + "\n".join(summary)
-    except ImportError:
-        return "DuckDuckGo search not available. Install: pip install duckduckgo-search"
-    except Exception as e:
-        return f"Search error: {e}"
+# (web_search merged into deep_search tool above)
 
 # ── Type Text (type anywhere) ──
 
-@llm.function_tool(description="Type text into the currently focused input field, chat box, or text area. Works with any app — ChatGPT, WhatsApp, Notepad, etc. Use this when the user says 'type', 'likh do', 'type karo', etc.")
+@llm.function_tool(description="Type text into the currently focused input field, chat box, or text area. Works with any app — ChatGPT, WhatsApp, Notepad, browser, etc. Use when the user wants to type or write something.")
 async def type_text(text: str) -> str:
     """Type the given text into the active window.
     
@@ -938,7 +1283,7 @@ async def type_text(text: str) -> str:
         return f"Failed to type: {e}"
 
 
-@llm.function_tool(description="Press Enter key to send/submit the typed message. Use after type_text when user says 'send it', 'bhej do', 'enter daba do', etc.")
+@llm.function_tool(description="Press Enter key to send or submit the typed message. Use after type_text when the user wants to send or submit.")
 async def press_enter() -> str:
     """Press the Enter key to submit."""
     try:
@@ -949,12 +1294,82 @@ async def press_enter() -> str:
 
 
 # ══════════════════════════════════════════
+# 🎙️ VOICE SWITCHING
+# ══════════════════════════════════════════
+
+VOICE_OPTIONS = {
+    "aoede": {"name": "Aoede", "tone": "Breezy", "gender": "female"},
+    "kore": {"name": "Kore", "tone": "Firm", "gender": "female"},
+    "leda": {"name": "Leda", "tone": "Youthful", "gender": "female"},
+    "zephyr": {"name": "Zephyr", "tone": "Bright", "gender": "female"},
+    "puck": {"name": "Puck", "tone": "Upbeat", "gender": "male"},
+    "charon": {"name": "Charon", "tone": "Informative", "gender": "male"},
+    "orus": {"name": "Orus", "tone": "Firm", "gender": "male"},
+    "fenrir": {"name": "Fenrir", "tone": "Excitable", "gender": "male"},
+}
+
+@llm.function_tool(description="List all available voice options. Use when user asks 'what voices are available', 'show me voices', 'konsi voices hain', etc.")
+async def list_voices() -> str:
+    """List all available Gemini voice options."""
+    lines = ["Available voices:"]
+    for key, info in VOICE_OPTIONS.items():
+        lines.append(f"- {info['name']} ({info['tone']}, {info['gender']})")
+    # Get current voice from config
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+        with open(config_path, "r") as f:
+            current = json.load(f).get("voice", "Aoede")
+        lines.append(f"\nCurrently using: {current}")
+    except Exception:
+        pass
+    return "\n".join(lines)
+
+@llm.function_tool(description="Change the AI assistant's voice. Use when user says 'change voice to Kore', 'female voice lagao', 'male voice chahiye', etc. The voice change takes effect after restart.")
+async def change_voice(voice_name: str) -> str:
+    """Change the voice used by the AI assistant.
+    
+    Args:
+        voice_name: The name of the voice to switch to (e.g. Aoede, Kore, Leda, Zephyr, Puck, Charon, Orus, Fenrir).
+    """
+    key = voice_name.strip().lower()
+    if key not in VOICE_OPTIONS:
+        options = ", ".join(info["name"] for info in VOICE_OPTIONS.values())
+        return f"Unknown voice '{voice_name}'. Available voices: {options}"
+    
+    voice_info = VOICE_OPTIONS[key]
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        config["voice"] = voice_info["name"]
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4, ensure_ascii=False)
+
+        # Also update active personality if applicable
+        pers_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "personalities.json")
+        try:
+            with open(pers_path, "r", encoding="utf-8") as f:
+                pers = json.load(f)
+            active = pers.get("active", "")
+            if active and "profiles" in pers and active in pers["profiles"]:
+                pers["profiles"][active]["voice"] = voice_info["name"]
+                with open(pers_path, "w", encoding="utf-8") as f:
+                    json.dump(pers, f, indent=4, ensure_ascii=False)
+        except Exception:
+            pass
+
+        return f"Voice changed to {voice_info['name']} ({voice_info['tone']}, {voice_info['gender']}). The new voice will be active after restart."
+    except Exception as e:
+        return f"Failed to change voice: {e}"
+
+
+# ══════════════════════════════════════════
 # 📋 COLLECT ALL TOOLS INTO A LIST
 # ══════════════════════════════════════════
 
 ALL_TOOLS = [
     # System
-    toggle_sleep, shutdown, restart, lock_screen, sleep_mode,
+    sleep_mode, exit_assistant, shutdown, restart, lock_screen,
     open_task_manager, open_control_panel, open_settings,
     open_cmd, open_powershell, open_file_explorer,
     system_info, clean_temp, close_all_apps,
@@ -963,10 +1378,9 @@ ALL_TOOLS = [
     # Volume & Display
     volume_up, volume_down, set_volume, volume_mute, brightness,
     # Web & Browser
-    open_website, google_search, youtube_search, open_multiple_tabs,
+    open_website, open_in_browser, open_incognito,
+    deep_search, youtube_search, open_multiple_tabs,
     close_tab, refresh_page, wikipedia_search, copy_clipboard,
-    # Web Search
-    web_search,
     # Input & Typing
     select_all, undo, redo, type_text, press_enter,
     # Vision
@@ -983,6 +1397,8 @@ ALL_TOOLS = [
     open_app, close_app,
     # Media
     play_pause, next_track, previous_track,
+    # Voice
+    list_voices, change_voice,
     # Misc
     whatsapp_message, ip_address, clear_memory,
 ]

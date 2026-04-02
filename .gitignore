@@ -58,3 +58,13 @@ maxo/error_check.png
 # Keep icons but ignore other assets
 !maxo/maxo_icon.png
 !maxo/maxo_icon.ico
+
+# Jessica project specific
+Jessica/memory.json
+Jessica/jessica_agent.log
+Jessica/jessica.lock
+Jessica/state.json
+Jessica/conversation_history.json
+Jessica/screenshot.png
+Jessica/__pycache__/
+automations/

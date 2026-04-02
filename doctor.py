@@ -9,7 +9,178 @@ import sys
 import venv
 import subprocess
 import shutil
+import json
+import time
+import webbrowser
 from pathlib import Path
+
+
+def ensure_memory_json(jessica_dir):
+    """Check if memory.json exists, create it if missing."""
+    memory_file = jessica_dir / "memory.json"
+    if memory_file.exists():
+        print("✅ [OK] memory.json found.")
+    else:
+        print("⚠️  [WARNING] memory.json not found. Creating default...")
+        default_memory = {
+            "owner": "Abhiyank",
+            "owner_protected": True,
+            "created_at": __import__("datetime").datetime.now().isoformat(),
+            "facts": {
+                "owner_name": "Abhiyank",
+                "assistant_name": "Jessica",
+                "assistant_creator": "Abhiyank",
+                "persona": "Jessica, professional yet friendly, like J.A.R.V.I.S.",
+            },
+            "notes": [],
+            "reminders": [],
+            "preferences": {},
+            "important": [],
+        }
+        with open(memory_file, "w", encoding="utf-8") as f:
+            json.dump(default_memory, f, indent=2, ensure_ascii=False)
+        print("✅ [CREATED] memory.json with default structure.")
+
+
+def setup_env_interactive(jessica_dir, py_exec):
+    """Interactive .env setup — manual or auto (opens Chrome to LiveKit)."""
+    env_file = jessica_dir / ".env"
+
+    if env_file.exists():
+        print("✅ [OK] .env file found.")
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Check if it's just a template with placeholder values
+            if "your_api_key" in content or "your_google_api_key" in content or "your-livekit-url" in content:
+                print("⚠️  [WARNING] .env has placeholder values — needs real keys!")
+            else:
+                return  # .env exists and has real values
+        except Exception:
+            return
+    else:
+        print("⚠️  [WARNING] .env file not found.")
+
+    print()
+    print("━" * 55)
+    print("🔧 Environment Setup Required")
+    print("━" * 55)
+    print()
+    print("  Jessica needs the following API keys:")
+    print("  ├── LIVEKIT_URL       (from livekit.com)")
+    print("  ├── LIVEKIT_API_KEY   (from livekit.com)")
+    print("  ├── LIVEKIT_API_SECRET(from livekit.com)")
+    print("  └── GOOGLE_API_KEY    (from aistudio.google.com)")
+    print()
+    print("  How do you want to set up?")
+    print("  [1] MANUAL — I'll enter the keys myself")
+    print("  [2] AUTO   — Open Chrome and guide me to LiveKit")
+    print()
+
+    choice = input("  Choose (1 or 2): ").strip()
+
+    if choice == "2":
+        # AUTO mode — open Chrome and navigate to LiveKit
+        print()
+        print("🌐 Opening LiveKit in your browser...")
+        print("   Step 1: Sign up / Sign in at livekit.com")
+        print("   Step 2: Create a new project (or use existing)")
+        print("   Step 3: Go to Settings → Keys")
+        print("   Step 4: Copy your URL, API Key, and API Secret")
+        print()
+
+        # Try to open in the system's default Chrome
+        chrome_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        ]
+
+        chrome_opened = False
+        for chrome_path in chrome_paths:
+            if os.path.exists(chrome_path):
+                try:
+                    subprocess.Popen([chrome_path, "https://cloud.livekit.io/"])
+                    chrome_opened = True
+                    break
+                except Exception:
+                    continue
+
+        if not chrome_opened:
+            # Fallback to default browser
+            webbrowser.open("https://cloud.livekit.io/")
+
+        print("   ✅ Browser opened! Get your LiveKit credentials.")
+        print()
+
+        time.sleep(2)
+
+        # Also open Google AI Studio for API key
+        print("🌐 Also opening Google AI Studio for your Google API Key...")
+        if chrome_opened:
+            for chrome_path in chrome_paths:
+                if os.path.exists(chrome_path):
+                    try:
+                        subprocess.Popen([chrome_path, "https://aistudio.google.com/apikey"])
+                        break
+                    except Exception:
+                        continue
+        else:
+            webbrowser.open("https://aistudio.google.com/apikey")
+
+        print("   ✅ Browser opened! Get your Google API Key.")
+        print()
+        print("━" * 55)
+        print("   Now enter your keys below (paste from browser):")
+        print("━" * 55)
+        print()
+
+    elif choice == "1":
+        print()
+        print("━" * 55)
+        print("   Enter your API keys below:")
+        print("━" * 55)
+        print()
+
+    else:
+        print("⚠️  Invalid choice. Creating template .env...")
+        template = (
+            "# Jessica AI — Environment Variables\n"
+            "LIVEKIT_URL=wss://your-livekit-url.livekit.cloud\n"
+            "LIVEKIT_API_KEY=your_api_key\n"
+            "LIVEKIT_API_SECRET=your_api_secret\n"
+            "GOOGLE_API_KEY=your_google_api_key\n"
+        )
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.write(template)
+        print("📝 [CREATED] .env template — please fill in your keys later!")
+        return
+
+    # Collect keys from user
+    livekit_url = input("  LIVEKIT_URL (wss://...): ").strip()
+    livekit_key = input("  LIVEKIT_API_KEY: ").strip()
+    livekit_secret = input("  LIVEKIT_API_SECRET: ").strip()
+    google_key = input("  GOOGLE_API_KEY: ").strip()
+
+    # Validate
+    if not all([livekit_url, livekit_key, livekit_secret, google_key]):
+        print()
+        print("⚠️  Some keys are empty. Creating .env with what you provided...")
+        print("   You can edit Jessica/.env later to add missing keys.")
+
+    # Write .env
+    env_content = (
+        "# Jessica AI — Environment Variables\n"
+        f"LIVEKIT_URL={livekit_url or 'wss://your-livekit-url.livekit.cloud'}\n"
+        f"LIVEKIT_API_KEY={livekit_key or 'your_api_key'}\n"
+        f"LIVEKIT_API_SECRET={livekit_secret or 'your_api_secret'}\n"
+        f"GOOGLE_API_KEY={google_key or 'your_google_api_key'}\n"
+    )
+    with open(env_file, "w", encoding="utf-8") as f:
+        f.write(env_content)
+
+    print()
+    print("✅ [SAVED] .env file created with your keys!")
 
 
 def run_doctor():
@@ -20,7 +191,9 @@ def run_doctor():
     jessica_dir = base_dir / "Jessica"
     venv_dir = base_dir / "venv"
     requirements_file = jessica_dir / "requirements.txt"
-    env_file = jessica_dir / ".env"
+
+    # ── 0. Memory.json Check ──
+    ensure_memory_json(jessica_dir)
 
     # ── 1. Virtual Environment Check ──
     if not venv_dir.exists():
@@ -82,7 +255,7 @@ def run_doctor():
         return
 
     # ── 4. Install extra packages used in tools but not in requirements.txt ──
-    extras = ["pyperclip", "opencv-python"]
+    extras = ["pyperclip", "opencv-python", "pynput"]
     for pkg in extras:
         try:
             res = subprocess.run(
@@ -94,24 +267,11 @@ def run_doctor():
         except Exception:
             pass
 
-    # ── 5. .env File Check ──
-    if env_file.exists():
-        print("✅ [OK] .env file found.")
-    else:
-        print("⚠️  [WARNING] .env file not found. Creating template...")
-        template = (
-            "# Jessica AI — Environment Variables\n"
-            "LIVEKIT_URL=wss://your-livekit-url.livekit.cloud\n"
-            "LIVEKIT_API_KEY=your_api_key\n"
-            "LIVEKIT_API_SECRET=your_api_secret\n"
-            "GOOGLE_API_KEY=your_google_api_key\n"
-        )
-        with open(env_file, "w", encoding="utf-8") as f:
-            f.write(template)
-        print("📝 [CREATED] .env template created at Jessica/.env — please fill in your keys!")
+    # ── 5. .env File Check (Interactive) ──
+    setup_env_interactive(jessica_dir, py_exec)
 
     # ── 6. Verify critical imports inside venv ──
-    print("⏳ Verifying critical imports...")
+    print("\n⏳ Verifying critical imports...")
     critical_imports = [
         ("dotenv", "python-dotenv"),
         ("livekit.agents", "livekit-agents"),
@@ -192,6 +352,14 @@ def run_doctor():
                     print("🧹 [CLEANUP] Removed old start_ank.bat from Startup.")
                 except Exception:
                     pass
+
+    # ── 9. Automations directory ──
+    automations_dir = base_dir / "automations"
+    if not automations_dir.exists():
+        automations_dir.mkdir(exist_ok=True)
+        print("📁 [CREATED] automations/ directory for automation recordings.")
+    else:
+        print("✅ [OK] automations/ directory exists.")
 
     # ── Done ──
     print("\n" + "=" * 55)
